@@ -202,6 +202,9 @@ async function 处理WebSocket(request) {
 	});
 }
 
+
+
+
 /**
  * Handles outbound TCP connections.
  *
@@ -475,7 +478,7 @@ async function 远程套接字到WS(远程套接字, webSocket, 传输响应头�
 				 *
 				 * @param {Uint8Array} chunk
 				 * @param {*} controller
-				 */
+				*/
 				async write(chunk, controller) {
 					有传入数据 = true;
 					// remoteChunkCount++;
@@ -860,7 +863,7 @@ function 获取配置(userID, hostName) {
 	const vlessMain =
 	`${协议}` +
 	`${符号}${userID}@${hostName}:443`+
-	`?encryption=none&security=tls&sni=${hostName}&fp=randomized&type=ws&host=${hostName}&path=%2F%3Fed%3D2048#${hostName}`;
+	`?encryption=none&security=tls&sni=${hostName}&fp=randomized&type=ws&host=${hostName}&path=%2F%3Fed=2048#${hostName}`;
 
 	return `
 ################################################################
@@ -888,4 +891,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-						      }
+									       }
