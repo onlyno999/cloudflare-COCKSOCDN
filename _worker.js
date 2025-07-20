@@ -2,22 +2,19 @@
 // @ts-ignore
 import { connect } from 'cloudflare:sockets';
 
-// How to generate your own UUID:
-// [Windows] Press "Win + R", input cmd and run:  Powershell -NoExit -Command "[guid]::NewGuid()"
+// 如何生成你自己的 UUID:
+// [Windows] 按 "Win + R", 输入 cmd 并运行: Powershell -NoExit -Command "[guid]::NewGuid()"
 let 用户ID = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
 
-let 代理IP = '';
-
-// The user name and password do not contain special characters
-// Setting the address will ignore proxyIP
-// Example:  user:pass@host:port  or  host:port
+// 用户名和密码不包含特殊字符
+// 示例: user:pass@host:port 或 host:port
 let socks5地址 = ''; // 兼容旧的 env.SOCKS5
 
 // Added variables
-let 隐藏订阅 = false; // 开启 true ━ 关闭false
+let 隐藏订阅 = true; // 默认开启（true）隐藏订阅，显示嘲讽语。可以通过环境变量 HIDE_SUB=false 来关闭。
 let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿";
-let 启用SOCKS5反代 = true; // 默认关闭，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
-let 启用SOCKS5全局反代 = true; // 默认关闭，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
+let 启用SOCKS5反代 = true; // 默认开启，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS 时才生效
+let 启用SOCKS5全局反代 = true; // 默认开启，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS 时才生效
 let 我的SOCKS5账号 = ''; // 存储 SOCKS5_ADDRESS 的值
 
 if (!验证UUID有效性(用户ID)) {
@@ -30,15 +27,19 @@ let 启用Socks = false; // 默认关闭，在 fetch 中根据配置判断是否
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
-	 * @param {{UUID: string, PROXYIP: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string}} env
+	 * @param {{UUID: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string, HIDE_SUB?: string}} env
 	 * @param {import("@cloudflare/workers-types").ExecutionContext} ctx
 	 * @returns {Promise<Response>}
 	 */
 	async fetch(request, env, ctx) {
 		try {
 			用户ID = env.UUID || 用户ID;
-			代理IP = env.PROXYIP || 代理IP;
 			socks5地址 = env.SOCKS5 || socks5地址; // 兼容旧的 env.SOCKS5
+
+            // 新增：读取 隐藏订阅 环境变量
+            // 如果 env.HIDE_SUB 存在且不是空字符串，则覆盖默认的 隐藏订阅 值
+            // 这使得可以通过设置 HIDE_SUB=false 来禁用默认的隐藏行为
+			隐藏订阅 = 读取环境变量('HIDE_SUB', 隐藏订阅, env);
 
 			// 读取SOCKS5相关的环境变量
 			// 注意这里的读取顺序，我们先尝试读取 SOCKS5_ADDRESS
@@ -47,8 +48,8 @@ export default {
 			// 只有当 SOCKS5_ADDRESS 或 SOCKS5 被设置时，才尝试启用 SOCKS5 相关功能
 			if (我的SOCKS5账号 || socks5地址) {
 				// 如果有地址，默认启用反代和全局反代，但可以被环境变量显式覆盖
-				启用SOCKS5反代 = 读取环境变量('SOCKS5_ENABLE', true, env);
-				启用SOCKS5全局反代 = 读取环境变量('SOCKS5_GLOBAL', true, env);
+				启用SOCKS5反代 = 读取环境变量('SOCKS5_ENABLE', 启用SOCKS5反代, env);
+				启用SOCKS5全局反代 = 读取环境变量('SOCKS5_GLOBAL', 启用SOCKS5全局反代, env);
 
 				let currentSocks5Address = 我的SOCKS5账号 || socks5地址; // 优先使用 我的SOCKS5账号
 
@@ -224,7 +225,7 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 		const 写入器 = tcp套接字.writable.getWriter()
 		await 写入器.write(原始客户端数据); // first write, normal is tls client hello
 		写入器.releaseLock();
-		return tcp套接字;
+		return tcp套接记;
 	}
 
 	// if the cf connect tcp socket have no incoming data, we retry to redirect ip
@@ -233,7 +234,8 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 		if (启用Socks && (启用SOCKS5全局反代 || 启用SOCKS5反代)) {
 			tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
 		} else {
-			tcp套接字 = await 连接并写入(代理IP || 远程地址, 远程端口);
+			// 移除了代理IP的重试逻辑
+			tcp套接字 = await 连接并写入(远程地址, 远程端口);
 		}
 		// no matter retry success or not, close websocket
 		tcp套接字.closed.catch(error => {
@@ -251,7 +253,8 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 	} else if (启用Socks && 启用SOCKS5反代) { // 如果只启用了反代但不是全局
 		tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
 	} else {
-		tcp套接字 = await 连接并写入(代理IP || 远程地址, 远程端口);
+		// 移除了代理IP的连接逻辑
+		tcp套接字 = await 连接并写入(远程地址, 远程端口);
 	}
 
 	// when remoteSocket is ready, pass to websocket
@@ -881,4 +884,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-		}
+					   }
