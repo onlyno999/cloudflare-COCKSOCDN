@@ -28,7 +28,7 @@ let 启用Socks = false; // 默认关闭，在 fetch 中根据配置判断是否
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
-	 * @param {{UUID: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string, HIDE_SUBSCRIPTION?: string}} env
+	 * @param {{UUID: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string, '隐藏订阅'?: string}} env
 	 * @param {import("@cloudflare/workers-types").ExecutionContext} ctx
 	 * @returns {Promise<Response>}
 	 */
@@ -37,8 +37,8 @@ export default {
 			用户ID = env.UUID || 用户ID;
 			socks5地址 = env.SOCKS5 || socks5地址; // 兼容旧的 env.SOCKS5
 			
-			// 读取 隐藏订阅 环境变量
-			隐藏订阅 = 读取环境变量('HIDE_SUBSCRIPTION', 隐藏订阅, env);
+			// 读取 隐藏订阅 环境变量，使用中文变量名
+			隐藏订阅 = 读取环境变量('隐藏订阅', 隐藏订阅, env);
 
 			// 读取SOCKS5相关的环境变量
 			// 注意这里的读取顺序，我们先尝试读取 SOCKS5_ADDRESS
@@ -225,7 +225,7 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 		const 写入器 = tcp套接字.writable.getWriter()
 		await 写入器.write(原始客户端数据); // first write, normal is tls client hello
 		写入器.releaseLock();
-		return tcp套接켓;
+		return tcp套接字;
 	}
 
 	// if the cf connect tcp socket have no incoming data, we retry to redirect ip
@@ -884,4 +884,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-}
+	    }
