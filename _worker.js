@@ -2,23 +2,22 @@
 // @ts-ignore
 import { connect } from 'cloudflare:sockets';
 
-// 如何生成你自己的 UUID:
-// [Windows] 按 "Win + R", 输入 cmd 并运行: Powershell -NoExit -Command "[guid]::NewGuid()"
+// How to generate your own UUID:
+// [Windows] Press "Win + R", input cmd and run:  Powershell -NoExit -Command "[guid]::NewGuid()"
 let 用户ID = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
 
-// 重新引入 代理IP 变量，用于作为 SOCKS5 失败后的备用直连地址
-let 代理IP = ''; 
+let 代理IP = '';
 
-// 用户名和密码不包含特殊字符
-// 设置地址将忽略 代理IP
-// 示例: user:pass@host:port 或 host:port
+// The user name and password do not contain special characters
+// Setting the address will ignore proxyIP
+// Example:  user:pass@host:port  or  host:port
 let socks5地址 = ''; // 兼容旧的 env.SOCKS5
 
 // Added variables
-let 隐藏订阅 = true; // 默认开启（true）隐藏订阅，显示嘲讽语。可以通过环境变量 HIDE_SUB=false 来关闭。
+let 隐藏订阅 = false; // 开启 true ━ 关闭false
 let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿";
-let 启用SOCKS5反代 = true; // 默认开启，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS 时才生效
-let 启用SOCKS5全局反代 = true; // 默认开启，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS 时才生效
+let 启用SOCKS5反代 = true; // 默认关闭，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
+let 启用SOCKS5全局反代 = true; // 默认关闭，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
 let 我的SOCKS5账号 = ''; // 存储 SOCKS5_ADDRESS 的值
 
 if (!验证UUID有效性(用户ID)) {
@@ -31,31 +30,29 @@ let 启用Socks = false; // 默认关闭，在 fetch 中根据配置判断是否
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
-	 * @param {{UUID: string, PROXYIP: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string, HIDE_SUB?: string}} env
+	 * @param {{UUID: string, PROXYIP: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string, HIDE_SUBSCRIPTION?: string, MOCKING_MESSAGE?: string}} env
 	 * @param {import("@cloudflare/workers-types").ExecutionContext} ctx
 	 * @returns {Promise<Response>}
 	 */
 	async fetch(request, env, ctx) {
 		try {
 			用户ID = env.UUID || 用户ID;
-            // 重新引入：从环境变量读取 代理IP
-			代理IP = env.PROXYIP || 代理IP; 
+			代理IP = env.PROXYIP || 代理IP;
 			socks5地址 = env.SOCKS5 || socks5地址; // 兼容旧的 env.SOCKS5
-
-            // 新增：读取 隐藏订阅 环境变量
-            // 如果 env.HIDE_SUB 存在且不是空字符串，则覆盖默认的 隐藏订阅 值
-            // 这使得可以通过设置 HIDE_SUB=false 来禁用默认的隐藏行为
-			隐藏订阅 = 读取环境变量('HIDE_SUB', 隐藏订阅, env);
 
 			// 读取SOCKS5相关的环境变量
 			// 注意这里的读取顺序，我们先尝试读取 SOCKS5_ADDRESS
 			我的SOCKS5账号 = 读取环境变量('SOCKS5_ADDRESS', 我的SOCKS5账号, env);
 
+			// Add these lines to read HIDE_SUBSCRIPTION and MOCKING_MESSAGE from environment
+			隐藏订阅 = 读取环境变量('HIDE_SUBSCRIPTION', 隐藏订阅, env);
+			嘲讽语 = 读取环境变量('MOCKING_MESSAGE', 嘲讽语, env);
+
 			// 只有当 SOCKS5_ADDRESS 或 SOCKS5 被设置时，才尝试启用 SOCKS5 相关功能
 			if (我的SOCKS5账号 || socks5地址) {
 				// 如果有地址，默认启用反代和全局反代，但可以被环境变量显式覆盖
-				启用SOCKS5反代 = 读取环境变量('SOCKS5_ENABLE', 启用SOCKS5反代, env);
-				启用SOCKS5全局反代 = 读取环境变量('SOCKS5_GLOBAL', 启用SOCKS5全局反代, env);
+				启用SOCKS5反代 = 读取环境变量('SOCKS5_ENABLE', true, env);
+				启用SOCKS5全局反代 = 读取环境变量('SOCKS5_GLOBAL', true, env);
 
 				let currentSocks5Address = 我的SOCKS5账号 || socks5地址; // 优先使用 我的SOCKS5账号
 
@@ -231,19 +228,18 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 		const 写入器 = tcp套接字.writable.getWriter()
 		await 写入器.write(原始客户端数据); // first write, normal is tls client hello
 		写入器.releaseLock();
-		return tcp套接记;
+		return tcp套接字;
 	}
 
 	// if the cf connect tcp socket have no incoming data, we retry to redirect ip
 	async function 重试连接() {
-		// 优先 SOCKS5，然后是 代理IP，最后是直连远程地址
+		// 这里重试逻辑也应该遵循 SOCKS5 配置
 		if (启用Socks && (启用SOCKS5全局反代 || 启用SOCKS5反代)) {
-			tcp套接字 = await 连接并写入(远程地址, 远程端口, true); // 尝试 SOCKS5
-		} else if (代理IP && 代理IP !== '') { 
-            tcp套接字 = await 连接并写入(代理IP, 远程端口); // 尝试 代理IP
-        } else {
-			tcp套接字 = await 连接并写入(远程地址, 远程端口); // 最后尝试直连远程地址
+			tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
+		} else {
+			tcp套接字 = await 连接并写入(代理IP || 远程地址, 远程端口);
 		}
+		// no matter retry success or not, close websocket
 		tcp套接字.closed.catch(error => {
 			console.log('retry tcpSocket closed error', error);
 		}).finally(() => {
@@ -253,15 +249,13 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 	}
 
 	let tcp套接字;
-    // 优先 SOCKS5，然后是 代理IP，最后是直连远程地址
+	// 调整这里的判断，确保只有在 `启用Socks` 为 true 且相关 SOCKS5 标志也为 true 时才尝试 SOCKS5 连接
 	if (启用Socks && (启用SOCKS5反代 && 启用SOCKS5全局反代)) {
-		tcp套接字 = await 连接并写入(远程地址, 远程端口, true); // 尝试 SOCKS5 (全局)
-	} else if (启用Socks && 启用SOCKS5反代) {
-		tcp套接字 = await 连接并写入(远程地址, 远程端口, true); // 尝试 SOCKS5 (非全局)
-	} else if (代理IP && 代理IP !== '') { 
-        tcp套接字 = await 连接并写入(代理IP, 远程端口); // 尝试 代理IP
-    } else {
-		tcp套接字 = await 连接并写入(远程地址, 远程端口); // 最后尝试直连远程地址
+		tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
+	} else if (启用Socks && 启用SOCKS5反代) { // 如果只启用了反代但不是全局
+		tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
+	} else {
+		tcp套接字 = await 连接并写入(代理IP || 远程地址, 远程端口);
 	}
 
 	// when remoteSocket is ready, pass to websocket
@@ -507,7 +501,10 @@ async function 远程套接字到WS(远程套接字, webSocket, 传输响应头�
 					// safeCloseWebSocket(webSocket); // no need server close websocket frist for some case will casue HTTP ERR_CONTENT_LENGTH_MISMATCH issue, client will send close event anyway.
 				},
 				abort(reason) {
-					console.error(`remoteConnection!.readable abort`, reason);
+					console.error(
+						`远程套接字到WS has exception `,
+						error.stack || error
+					);
 				},
 			})
 		)
@@ -891,4 +888,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-}
+						      }
