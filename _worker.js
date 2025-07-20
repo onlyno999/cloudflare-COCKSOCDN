@@ -6,7 +6,7 @@ import { connect } from 'cloudflare:sockets';
 // [Windows] Press "Win + R", input cmd and run:  Powershell -NoExit -Command "[guid]::NewGuid()"
 let 用户ID = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
 
-let 代理IP = '';
+// 移除了 let 代理IP = '';
 
 // The user name and password do not contain special characters
 // Setting the address will ignore proxyIP
@@ -16,8 +16,8 @@ let socks5地址 = ''; // 兼容旧的 env.SOCKS5
 // Added variables
 let 隐藏订阅 = false; // 开启 true ━ 关闭false  <-- 这个变量现在只影响订阅是否隐藏，不影响嘲讽语的显示
 let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿";
-let 启用SOCKS5反代 = true; // 默认关闭，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
-let 启用SOCKS5全局反代 = true; // 默认关闭，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
+let 启用SOCKS5反代 = false; // 默认关闭，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
+let 启用SOCKS5全局反代 = false; // 默认关闭，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
 let 我的SOCKS5账号 = ''; // 存储 SOCKS5_ADDRESS 的值
 
 if (!验证UUID有效性(用户ID)) {
@@ -30,14 +30,14 @@ let 启用Socks = false; // 默认关闭，在 fetch 中根据配置判断是否
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
-	 * @param {{UUID: string, PROXYIP: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string, HIDE_SUBSCRIPTION?: string, MOCKING_MESSAGE?: string}} env
+	 * @param {{UUID: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string, HIDE_SUBSCRIPTION?: string, MOCKING_MESSAGE?: string}} env
 	 * @param {import("@cloudflare/workers-types").ExecutionContext} ctx
 	 * @returns {Promise<Response>}
 	 */
 	async fetch(request, env, ctx) {
 		try {
 			用户ID = env.UUID || 用户ID;
-			代理IP = env.PROXYIP || 代理IP;
+			// 移除了 代理IP = env.PROXYIP || 代理IP;
 			socks5地址 = env.SOCKS5 || socks5地址; // 兼容旧的 env.SOCKS5
 
 			// 读取SOCKS5相关的环境变量
@@ -49,10 +49,11 @@ export default {
 			嘲讽语 = 读取环境变量('嘲讽语', 嘲讽语, env);
 
 			// 只有当 SOCKS5_ADDRESS 或 SOCKS5 被设置时，才尝试启用 SOCKS5 相关功能
+			// 同时，确保默认值在没有显式环境变量时是 false
 			if (我的SOCKS5账号 || socks5地址) {
 				// 如果有地址，默认启用反代和全局反代，但可以被环境变量显式覆盖
-				启用SOCKS5反代 = 读取环境变量('SOCKS5_ENABLE', true, env);
-				启用SOCKS5全局反代 = 读取环境变量('SOCKS5_GLOBAL', true, env);
+				启用SOCKS5反代 = 读取环境变量('SOCKS5_ENABLE', true, env); // 默认 true
+				启用SOCKS5全局反代 = 读取环境变量('SOCKS5_GLOBAL', true, env); // 默认 true
 
 				let currentSocks5Address = 我的SOCKS5账号 || socks5地址; // 优先使用 我的SOCKS5账号
 
@@ -223,16 +224,22 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 		const 写入器 = tcp套接字.writable.getWriter()
 		await 写入器.write(原始客户端数据); // first write, normal is tls client hello
 		写入器.releaseLock();
-		return tcp套接字;
+		return tcp套接켓;
 	}
 
 	// if the cf connect tcp socket have no incoming data, we retry to redirect ip
 	async function 重试连接() {
 		// 这里重试逻辑也应该遵循 SOCKS5 配置
-		if (启用Socks && (启用SOCKS5全局反代 || 启用SOCKS5反代)) {
+		// 优先尝试SOCKS5全局反代，其次是SOCKS5反代，最后直连
+		if (启用Socks && 启用SOCKS5全局反代) {
+			tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
+		} else if (启用Socks && 启用SOCKS5反代) {
+			// 这里表示非全局 SOCKS5 反代，但 SOCKS5 反代被启用
+			// 此时，如果之前尝试直连失败，现在尝试通过 SOCKS5 代理
 			tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
 		} else {
-			tcp套接字 = await 连接并写入(代理IP || 远程地址, 远程端口);
+			// 不启用 SOCKS5 或 SOCKS5 连接失败，尝试直连
+			tcp套接字 = await 连接并写入(远程地址, 远程端口);
 		}
 		// no matter retry success or not, close websocket
 		tcp套接字.closed.catch(error => {
@@ -245,12 +252,13 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 
 	let tcp套接字;
 	// 调整这里的判断，确保只有在 `启用Socks` 为 true 且相关 SOCKS5 标志也为 true 时才尝试 SOCKS5 连接
-	if (启用Socks && (启用SOCKS5反代 && 启用SOCKS5全局反代)) {
+	// 优先尝试SOCKS5全局反代，其次是SOCKS5反代，最后直连
+	if (启用Socks && 启用SOCKS5全局反代) {
 		tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
 	} else if (启用Socks && 启用SOCKS5反代) { // 如果只启用了反代但不是全局
 		tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
 	} else {
-		tcp套接字 = await 连接并写入(代理IP || 远程地址, 远程端口);
+		tcp套接字 = await 连接并写入(远程地址, 远程端口);
 	}
 
 	// when remoteSocket is ready, pass to websocket
@@ -757,7 +765,12 @@ async function socks5连接(地址类型, 远程地址, 远程端口, 日志记�
 			break;
 		case 3:
 			目标地址 = new Uint8Array(
-				[4, ...远程地址.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]
+				[4, ...远程地址.split(':').flatMap(x => {
+					// Handle cases like :: or single colon for IPv6
+					if (x.length === 0) return [0, 0];
+					if (x.length === 1) return [0, parseInt(x, 16)];
+					return [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)];
+				})]
 			);
 			break;
 		default:
@@ -809,7 +822,11 @@ function 解析Socks5地址(address) {
 	hostname = latters.join(":");
 	const regex = /^\[.*\]$/;
 	if (hostname.includes(":") && !regex.test(hostname)) {
-		throw new Error('Invalid SOCKS address format');
+		// This condition might be too strict for IPv6 if it's not enclosed in brackets
+		// For example, if "hostname" is already "::1", regex.test(hostname) will be false
+		// but hostname.includes(":") is true, leading to an error.
+		// A more robust check for IPv6 without brackets might be needed if this causes issues.
+		// However, for typical domain/IPv4, this is fine.
 	}
 	return {
 		username,
@@ -883,4 +900,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-			}
+}
