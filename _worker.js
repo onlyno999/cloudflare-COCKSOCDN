@@ -45,8 +45,8 @@ export default {
 			我的SOCKS5账号 = 读取环境变量('SOCKS5_ADDRESS', 我的SOCKS5账号, env);
 
 			// Add these lines to read HIDE_SUBSCRIPTION and MOCKING_MESSAGE from environment
-			隐藏订阅 = 读取环境变量('HIDE_SUBSCRIPTION', 隐藏订阅, env);
-			嘲讽语 = 读取环境变量('MOCKING_MESSAGE', 嘲讽语, env);
+			隐藏订阅 = 读取环境变量('隐藏订阅', 隐藏订阅, env);
+			嘲讽语 = 读取环境变量('嘲讽语', 嘲讽语, env);
 
 			// 只有当 SOCKS5_ADDRESS 或 SOCKS5 被设置时，才尝试启用 SOCKS5 相关功能
 			if (我的SOCKS5账号 || socks5地址) {
