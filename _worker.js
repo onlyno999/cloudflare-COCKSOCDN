@@ -11,27 +11,26 @@ let 代理IP = '';
 // The user name and password do not contain special characters
 // Setting the address will ignore proxyIP
 // Example:  user:pass@host:port  or  host:port
-let socks5地址 = '';
+let socks5地址 = ''; // 兼容旧的 env.SOCKS5
 
 // Added variables
 let 隐藏订阅 = false; // 开启 true ━ 关闭false
 let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿";
-let 启用SOCKS5反代 = true; // Default value, will be overridden by env
-let 启用SOCKS5全局反代 = true; // Default value, will be overridden by env
-let 我的SOCKS5账号 = ''; // Default value, will be overridden by env
-
+let 启用SOCKS5反代 = true; // 默认关闭，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
+let 启用SOCKS5全局反代 = true; // 默认关闭，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
+let 我的SOCKS5账号 = ''; // 存储 SOCKS5_ADDRESS 的值
 
 if (!验证UUID有效性(用户ID)) {
 	throw new Error('uuid is not valid');
 }
 
 let 解析后Socks5地址 = {};
-let 启用Socks = false;
+let 启用Socks = false; // 默认关闭，在 fetch 中根据配置判断是否启用
 
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
-	 * @param {{UUID: string, PROXYIP: string}} env
+	 * @param {{UUID: string, PROXYIP: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string}} env
 	 * @param {import("@cloudflare/workers-types").ExecutionContext} ctx
 	 * @returns {Promise<Response>}
 	 */
@@ -39,23 +38,36 @@ export default {
 		try {
 			用户ID = env.UUID || 用户ID;
 			代理IP = env.PROXYIP || 代理IP;
-			socks5地址 = env.SOCKS5 || socks5地址;
+			socks5地址 = env.SOCKS5 || socks5地址; // 兼容旧的 env.SOCKS5
 
-			// Read SOCKS5 related environment variables
-			启用SOCKS5反代 = 读取环境变量('SOCKS5_ENABLE', 启用SOCKS5反代, env);
-			启用SOCKS5全局反代 = 读取环境变量('SOCKS5_GLOBAL', 启用SOCKS5全局反代, env);
+			// 读取SOCKS5相关的环境变量
+			// 注意这里的读取顺序，我们先尝试读取 SOCKS5_ADDRESS
 			我的SOCKS5账号 = 读取环境变量('SOCKS5_ADDRESS', 我的SOCKS5账号, env);
 
-			if (socks5地址) {
+			// 只有当 SOCKS5_ADDRESS 或 SOCKS5 被设置时，才尝试启用 SOCKS5 相关功能
+			if (我的SOCKS5账号 || socks5地址) {
+				// 如果有地址，默认启用反代和全局反代，但可以被环境变量显式覆盖
+				启用SOCKS5反代 = 读取环境变量('SOCKS5_ENABLE', true, env);
+				启用SOCKS5全局反代 = 读取环境变量('SOCKS5_GLOBAL', true, env);
+
+				let currentSocks5Address = 我的SOCKS5账号 || socks5地址; // 优先使用 我的SOCKS5账号
+
 				try {
-					解析后Socks5地址 = 解析Socks5地址(socks5地址);
-					启用Socks = true;
+					解析后Socks5地址 = 解析Socks5地址(currentSocks5Address);
+					启用Socks = true; // SOCKS5地址解析成功，启用Socks连接
 				} catch (err) {
-  			/** @type {Error} */ let e = err;
-					console.log(e.toString());
-					启用Socks = false;
+					/** @type {Error} */ let e = err;
+					console.log(`Error parsing SOCKS5 address: ${e.toString()}`);
+					启用Socks = false; // 解析失败，禁用Socks
 				}
+			} else {
+				// 如果没有 SOCKS5_ADDRESS 也没有 SOCKS5，则确保所有 SOCKS5 功能都关闭
+				启用SOCKS5反代 = false;
+				启用SOCKS5全局反代 = false;
+				启用Socks = false;
 			}
+
+
 			const 升级头 = request.headers.get('Upgrade');
 			if (!升级头 || 升级头 !== 'websocket') {
 				const url = new URL(request.url);
@@ -209,7 +221,7 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 			});
 		远程套接字.value = tcp套接字;
 		日志记录(`connected to ${地址}:${端口}`);
-		const 写入器 = tcp套接字.writable.getWriter();
+		const 写入器 = tcp套接字.writable.getWriter()
 		await 写入器.write(原始客户端数据); // first write, normal is tls client hello
 		写入器.releaseLock();
 		return tcp套接字;
@@ -217,7 +229,8 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 
 	// if the cf connect tcp socket have no incoming data, we retry to redirect ip
 	async function 重试连接() {
-		if (启用Socks) {
+		// 这里重试逻辑也应该遵循 SOCKS5 配置
+		if (启用Socks && (启用SOCKS5全局反代 || 启用SOCKS5反代)) {
 			tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
 		} else {
 			tcp套接字 = await 连接并写入(代理IP || 远程地址, 远程端口);
@@ -232,9 +245,10 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 	}
 
 	let tcp套接字;
-	if (启用SOCKS5反代 && 启用SOCKS5全局反代) {
+	// 调整这里的判断，确保只有在 `启用Socks` 为 true 且相关 SOCKS5 标志也为 true 时才尝试 SOCKS5 连接
+	if (启用Socks && (启用SOCKS5反代 && 启用SOCKS5全局反代)) {
 		tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
-	} else if (启用Socks) {
+	} else if (启用Socks && 启用SOCKS5反代) { // 如果只启用了反代但不是全局
 		tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
 	} else {
 		tcp套接字 = await 连接并写入(代理IP || 远程地址, 远程端口);
@@ -811,7 +825,7 @@ function 解析Socks5地址(address) {
  * @returns {any} The value of the environment variable or the default value.
  */
 function 读取环境变量(varName, defaultValue, env) {
-    if (env && typeof env[varName] !== 'undefined') {
+    if (env && typeof env[varName] !== 'undefined' && env[varName] !== '') { // Added env[varName] !== '' check
         // Attempt to parse boolean strings
         if (typeof defaultValue === 'boolean') {
             const envValue = String(env[varName]).toLowerCase();
@@ -867,4 +881,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-}
+		}
