@@ -14,7 +14,7 @@ let 代理IP = '';
 let socks5地址 = ''; // 兼容旧的 env.SOCKS5
 
 // Added variables
-let 隐藏订阅 = false; // 开启 true ━ 关闭false
+let 隐藏订阅 = false; // 开启 true ━ 关闭false  <-- 这个变量现在只影响订阅是否隐藏，不影响嘲讽语的显示
 let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿";
 let 启用SOCKS5反代 = true; // 默认关闭，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
 let 启用SOCKS5全局反代 = true; // 默认关闭，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
@@ -79,16 +79,8 @@ export default {
 					case '/':
 						return new Response(JSON.stringify(request.cf), { status: 200 });
 					case `/${用户ID}`: {
-						if (隐藏订阅) {
-							return new Response(嘲讽语, { status: 200 });
-						}
-						const vless配置 = 获取配置(用户ID, request.headers.get('Host'));
-						return new Response(`${vless配置}`, {
-							status: 200,
-							headers: {
-								"Content-Type": "text/plain;charset=utf-8",
-							}
-						});
+						// 强制显示嘲讽语，无论隐藏订阅设置如何
+						return new Response(嘲讽语, { status: 200 });
 					}
 					default:
 						return new Response('Not found', { status: 404 });
@@ -268,7 +260,7 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 
 /**
  *
- * @param {import("@cloudflare/workers-types").WebSocket} webSocketServer
+ * @param {import("@cloudflare/workers-types").WebSocket} webSocket服务器
  * @param {string} earlyDataHeader for ws 0rtt
  * @param {(info: string)=> void} log for ws 0rtt
  */
@@ -891,4 +883,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-									       }
+			}
