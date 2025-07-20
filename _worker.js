@@ -13,6 +13,14 @@ let 代理IP = '';
 // Example:  user:pass@host:port  or  host:port
 let socks5地址 = '';
 
+// Added variables
+let 隐藏订阅 = false; // 开启 true ━ 关闭false
+let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿";
+let 启用SOCKS5反代 = true; // Default value, will be overridden by env
+let 启用SOCKS5全局反代 = true; // Default value, will be overridden by env
+let 我的SOCKS5账号 = ''; // Default value, will be overridden by env
+
+
 if (!验证UUID有效性(用户ID)) {
 	throw new Error('uuid is not valid');
 }
@@ -32,6 +40,12 @@ export default {
 			用户ID = env.UUID || 用户ID;
 			代理IP = env.PROXYIP || 代理IP;
 			socks5地址 = env.SOCKS5 || socks5地址;
+
+			// Read SOCKS5 related environment variables
+			启用SOCKS5反代 = 读取环境变量('SOCKS5_ENABLE', 启用SOCKS5反代, env);
+			启用SOCKS5全局反代 = 读取环境变量('SOCKS5_GLOBAL', 启用SOCKS5全局反代, env);
+			我的SOCKS5账号 = 读取环境变量('SOCKS5_ADDRESS', 我的SOCKS5账号, env);
+
 			if (socks5地址) {
 				try {
 					解析后Socks5地址 = 解析Socks5地址(socks5地址);
@@ -49,6 +63,9 @@ export default {
 					case '/':
 						return new Response(JSON.stringify(request.cf), { status: 200 });
 					case `/${用户ID}`: {
+						if (隐藏订阅) {
+							return new Response(嘲讽语, { status: 200 });
+						}
 						const vless配置 = 获取配置(用户ID, request.headers.get('Host'));
 						return new Response(`${vless配置}`, {
 							status: 200,
@@ -214,7 +231,14 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 		远程套接字到WS(tcp套接字, webSocket, 传输响应头部, null, 日志记录);
 	}
 
-	let tcp套接字 = await 连接并写入(远程地址, 远程端口);
+	let tcp套接字;
+	if (启用SOCKS5反代 && 启用SOCKS5全局反代) {
+		tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
+	} else if (启用Socks) {
+		tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
+	} else {
+		tcp套接字 = await 连接并写入(代理IP || 远程地址, 远程端口);
+	}
 
 	// when remoteSocket is ready, pass to websocket
 	// remote--> ws
@@ -598,7 +622,24 @@ async function 处理DNS查询(udpChunk, webSocket, 传输响应头部, 日志�
  * @param {function} log The logging function.
  */
 async function socks5连接(地址类型, 远程地址, 远程端口, 日志记录) {
-	const { username, password, hostname, port } = 解析后Socks5地址;
+	let username, password, hostname, port;
+	if (我的SOCKS5账号) {
+		try {
+			const parsed = 解析Socks5地址(我的SOCKS5账号);
+			username = parsed.username;
+			password = parsed.password;
+			hostname = parsed.hostname;
+			port = parsed.port;
+		} catch (err) {
+			日志记录(`Error parsing SOCKS5_ADDRESS: ${err.toString()}`);
+			return;
+		}
+	} else {
+		// Fallback to existing socks5地址 if 我的SOCKS5账号 is not set
+		({ username, password, hostname, port } = 解析后Socks5地址);
+	}
+
+
 	// Connect to the SOCKS server
 	const socket = connect({
 		hostname,
@@ -761,6 +802,30 @@ function 解析Socks5地址(address) {
 		port,
 	}
 }
+
+/**
+ * Helper function to read environment variables with default values.
+ * @param {string} varName The name of the environment variable.
+ * @param {any} defaultValue The default value if the environment variable is not set.
+ * @param {any} env The environment object.
+ * @returns {any} The value of the environment variable or the default value.
+ */
+function 读取环境变量(varName, defaultValue, env) {
+    if (env && typeof env[varName] !== 'undefined') {
+        // Attempt to parse boolean strings
+        if (typeof defaultValue === 'boolean') {
+            const envValue = String(env[varName]).toLowerCase();
+            if (envValue === 'true') {
+                return true;
+            } else if (envValue === 'false') {
+                return false;
+            }
+        }
+        return env[varName];
+    }
+    return defaultValue;
+}
+
 
 /**
  *
