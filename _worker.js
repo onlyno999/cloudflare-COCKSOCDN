@@ -1,24 +1,24 @@
-// <!--GAMFC-->version base on commit 58686d5d125194d34a1137913b3a64ddcf55872f, time is 2024-11-27 09:26:02 UTC<!--GAMFC-END-->.
+// version base on commit 58686d5d125194d34a1137913b3a64ddcf55872f, time is 2024-11-27 09:26:02 UTC.
 // @ts-ignore
 import { connect } from 'cloudflare:sockets';
 
 // How to generate your own UUID:
 // [Windows] Press "Win + R", input cmd and run:  Powershell -NoExit -Command "[guid]::NewGuid()"
-let userID = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
+let 用户ID = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
 
-let proxyIP = '';
+let 代理IP = '';
 
 // The user name and password do not contain special characters
 // Setting the address will ignore proxyIP
 // Example:  user:pass@host:port  or  host:port
-let socks5Address = '';
+let socks5地址 = '';
 
-if (!isValidUUID(userID)) {
+if (!验证UUID有效性(用户ID)) {
 	throw new Error('uuid is not valid');
 }
 
-let parsedSocks5Address = {}; 
-let enableSocks = false;
+let 解析后Socks5地址 = {};
+let 启用Socks = false;
 
 export default {
 	/**
@@ -29,28 +29,28 @@ export default {
 	 */
 	async fetch(request, env, ctx) {
 		try {
-			userID = env.UUID || userID;
-			proxyIP = env.PROXYIP || proxyIP;
-			socks5Address = env.SOCKS5 || socks5Address;
-			if (socks5Address) {
+			用户ID = env.UUID || 用户ID;
+			代理IP = env.PROXYIP || 代理IP;
+			socks5地址 = env.SOCKS5 || socks5地址;
+			if (socks5地址) {
 				try {
-					parsedSocks5Address = socks5AddressParser(socks5Address);
-					enableSocks = true;
+					解析后Socks5地址 = 解析Socks5地址(socks5地址);
+					启用Socks = true;
 				} catch (err) {
   			/** @type {Error} */ let e = err;
 					console.log(e.toString());
-					enableSocks = false;
+					启用Socks = false;
 				}
 			}
-			const upgradeHeader = request.headers.get('Upgrade');
-			if (!upgradeHeader || upgradeHeader !== 'websocket') {
+			const 升级头 = request.headers.get('Upgrade');
+			if (!升级头 || 升级头 !== 'websocket') {
 				const url = new URL(request.url);
 				switch (url.pathname) {
 					case '/':
 						return new Response(JSON.stringify(request.cf), { status: 200 });
-					case `/${userID}`: {
-						const vlessConfig = getVLESSConfig(userID, request.headers.get('Host'));
-						return new Response(`${vlessConfig}`, {
+					case `/${用户ID}`: {
+						const vless配置 = 获取配置(用户ID, request.headers.get('Host'));
+						return new Response(`${vless配置}`, {
 							status: 200,
 							headers: {
 								"Content-Type": "text/plain;charset=utf-8",
@@ -61,7 +61,7 @@ export default {
 						return new Response('Not found', { status: 404 });
 				}
 			} else {
-				return await vlessOverWSHandler(request);
+				return await 处理WebSocket(request);
 			}
 		} catch (err) {
 			/** @type {Error} */ let e = err;
@@ -74,69 +74,69 @@ export default {
 
 
 /**
- * 
+ *
  * @param {import("@cloudflare/workers-types").Request} request
  */
-async function vlessOverWSHandler(request) {
+async function 处理WebSocket(request) {
 
 	/** @type {import("@cloudflare/workers-types").WebSocket[]} */
 	// @ts-ignore
-	const webSocketPair = new WebSocketPair();
-	const [client, webSocket] = Object.values(webSocketPair);
+	const webSocket对 = new WebSocketPair();
+	const [客户端, webSocket] = Object.values(webSocket对);
 
 	webSocket.accept();
 
-	let address = '';
-	let portWithRandomLog = '';
-	const log = (/** @type {string} */ info, /** @type {string | undefined} */ event) => {
-		console.log(`[${address}:${portWithRandomLog}] ${info}`, event || '');
+	let 地址 = '';
+	let 端口带随机日志 = '';
+	const 日志记录 = (/** @type {string} */ 信息, /** @type {string | undefined} */ 事件) => {
+		console.log(`[${地址}:${端口带随机日志}] ${信息}`, 事件 || '');
 	};
-	const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
+	const 早期数据头 = request.headers.get('sec-websocket-protocol') || '';
 
-	const readableWebSocketStream = makeReadableWebSocketStream(webSocket, earlyDataHeader, log);
+	const 可读WebSocket流 = 创建可读WebSocket流(webSocket, 早期数据头, 日志记录);
 
 	/** @type {{ value: import("@cloudflare/workers-types").Socket | null}}*/
-	let remoteSocketWapper = {
+	let 远程套接字封装 = {
 		value: null,
 	};
-	let isDns = false;
+	let 是DNS查询 = false;
 
 	// ws --> remote
-	readableWebSocketStream.pipeTo(new WritableStream({
+	可读WebSocket流.pipeTo(new WritableStream({
 		async write(chunk, controller) {
-			if (isDns) {
-				return await handleDNSQuery(chunk, webSocket, null, log);
+			if (是DNS查询) {
+				return await 处理DNS查询(chunk, webSocket, null, 日志记录);
 			}
-			if (remoteSocketWapper.value) {
-				const writer = remoteSocketWapper.value.writable.getWriter()
-				await writer.write(chunk);
-				writer.releaseLock();
+			if (远程套接字封装.value) {
+				const 写入器 = 远程套接字封装.value.writable.getWriter()
+				await 写入器.write(chunk);
+				写入器.releaseLock();
 				return;
 			}
 
 			const {
-				hasError,
-				message,
-				addressType,
-				portRemote = 443,
-				addressRemote = '',
-				rawDataIndex,
-				vlessVersion = new Uint8Array([0, 0]),
-				isUDP,
-			} = processVlessHeader(chunk, userID);
-			address = addressRemote;
-			portWithRandomLog = `${portRemote}--${Math.random()} ${isUDP ? 'udp ' : 'tcp '
+				hasError: 有错误,
+				message: 消息,
+				addressType: 地址类型,
+				portRemote: 远程端口 = 443,
+				addressRemote: 远程地址 = '',
+				rawDataIndex: 原始数据索引,
+				vlessVersion: 传输版本 = new Uint8Array([0, 0]),
+				isUDP: 是UDP协议,
+			} = 处理传输头部(chunk, 用户ID);
+			地址 = 远程地址;
+			端口带随机日志 = `${远程端口}--${Math.random()} ${是UDP协议 ? 'udp ' : 'tcp '
 				} `;
-			if (hasError) {
+			if (有错误) {
 				// controller.error(message);
-				throw new Error(message); // cf seems has bug, controller.error will not end stream
+				throw new Error(消息); // cf seems has bug, controller.error will not end stream
 				// webSocket.close(1000, message);
 				return;
 			}
 			// if UDP but port not DNS port, close it
-			if (isUDP) {
-				if (portRemote === 53) {
-					isDns = true;
+			if (是UDP协议) {
+				if (远程端口 === 53) {
+					是DNS查询 = true;
 				} else {
 					// controller.error('UDP proxy only enable for DNS which is port 53');
 					throw new Error('UDP proxy only enable for DNS which is port 53'); // cf seems has bug, controller.error will not end stream
@@ -144,28 +144,28 @@ async function vlessOverWSHandler(request) {
 				}
 			}
 			// ["version", "附加信息长度 N"]
-			const vlessResponseHeader = new Uint8Array([vlessVersion[0], 0]);
-			const rawClientData = chunk.slice(rawDataIndex);
+			const 传输响应头部 = new Uint8Array([传输版本[0], 0]);
+			const 原始客户端数据 = chunk.slice(原始数据索引);
 
-			if (isDns) {
-				return handleDNSQuery(rawClientData, webSocket, vlessResponseHeader, log);
+			if (是DNS查询) {
+				return 处理DNS查询(原始客户端数据, webSocket, 传输响应头部, 日志记录);
 			}
-			handleTCPOutBound(remoteSocketWapper, addressType, addressRemote, portRemote, rawClientData, webSocket, vlessResponseHeader, log);
+			处理TCP出站(远程套接字封装, 地址类型, 远程地址, 远程端口, 原始客户端数据, webSocket, 传输响应头部, 日志记录);
 		},
 		close() {
-			log(`readableWebSocketStream is close`);
+			日志记录(`readableWebSocketStream is close`);
 		},
 		abort(reason) {
-			log(`readableWebSocketStream is abort`, JSON.stringify(reason));
+			日志记录(`readableWebSocketStream is abort`, JSON.stringify(reason));
 		},
 	})).catch((err) => {
-		log('readableWebSocketStream pipeTo error', err);
+		日志记录('readableWebSocketStream pipeTo error', err);
 	});
 
 	return new Response(null, {
 		status: 101,
 		// @ts-ignore
-		webSocket: client,
+		webSocket: 客户端,
 	});
 }
 
@@ -182,83 +182,83 @@ async function vlessOverWSHandler(request) {
  * @param {function} log The logging function.
  * @returns {Promise<void>} The remote socket.
  */
-async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, vlessResponseHeader, log,) {
-	async function connectAndWrite(address, port, socks = false) {
+async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远程端口, 原始客户端数据, webSocket, 传输响应头部, 日志记录,) {
+	async function 连接并写入(地址, 端口, socks = false) {
 		/** @type {import("@cloudflare/workers-types").Socket} */
-		const tcpSocket = socks ? await socks5Connect(addressType, address, port, log)
+		const tcp套接字 = socks ? await socks5连接(地址类型, 地址, 端口, 日志记录)
 			: connect({
-				hostname: address,
-				port: port,
+				hostname: 地址,
+				port: 端口,
 			});
-		remoteSocket.value = tcpSocket;
-		log(`connected to ${address}:${port}`);
-		const writer = tcpSocket.writable.getWriter();
-		await writer.write(rawClientData); // first write, normal is tls client hello
-		writer.releaseLock();
-		return tcpSocket;
+		远程套接字.value = tcp套接字;
+		日志记录(`connected to ${地址}:${端口}`);
+		const 写入器 = tcp套接字.writable.getWriter();
+		await 写入器.write(原始客户端数据); // first write, normal is tls client hello
+		写入器.releaseLock();
+		return tcp套接字;
 	}
 
 	// if the cf connect tcp socket have no incoming data, we retry to redirect ip
-	async function retry() {
-		if (enableSocks) {
-			tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
+	async function 重试连接() {
+		if (启用Socks) {
+			tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
 		} else {
-			tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
+			tcp套接字 = await 连接并写入(代理IP || 远程地址, 远程端口);
 		}
 		// no matter retry success or not, close websocket
-		tcpSocket.closed.catch(error => {
+		tcp套接字.closed.catch(error => {
 			console.log('retry tcpSocket closed error', error);
 		}).finally(() => {
-			safeCloseWebSocket(webSocket);
+			安全关闭WebSocket(webSocket);
 		})
-		remoteSocketToWS(tcpSocket, webSocket, vlessResponseHeader, null, log);
+		远程套接字到WS(tcp套接字, webSocket, 传输响应头部, null, 日志记录);
 	}
 
-	let tcpSocket = await connectAndWrite(addressRemote, portRemote);
+	let tcp套接字 = await 连接并写入(远程地址, 远程端口);
 
 	// when remoteSocket is ready, pass to websocket
 	// remote--> ws
-	remoteSocketToWS(tcpSocket, webSocket, vlessResponseHeader, retry, log);
+	远程套接字到WS(tcp套接字, webSocket, 传输响应头部, 重试连接, 日志记录);
 }
 
 /**
- * 
+ *
  * @param {import("@cloudflare/workers-types").WebSocket} webSocketServer
  * @param {string} earlyDataHeader for ws 0rtt
  * @param {(info: string)=> void} log for ws 0rtt
  */
-function makeReadableWebSocketStream(webSocketServer, earlyDataHeader, log) {
-	let readableStreamCancel = false;
-	const stream = new ReadableStream({
+function 创建可读WebSocket流(webSocket服务器, 早期数据头, 日志记录) {
+	let 可读流取消 = false;
+	const 流 = new ReadableStream({
 		start(controller) {
-			webSocketServer.addEventListener('message', (event) => {
-				if (readableStreamCancel) {
+			webSocket服务器.addEventListener('message', (event) => {
+				if (可读流取消) {
 					return;
 				}
-				const message = event.data;
-				controller.enqueue(message);
+				const 消息 = event.data;
+				controller.enqueue(消息);
 			});
 
 			// The event means that the client closed the client -> server stream.
 			// However, the server -> client stream is still open until you call close() on the server side.
 			// The WebSocket protocol says that a separate close message must be sent in each direction to fully close the socket.
-			webSocketServer.addEventListener('close', () => {
+			webSocket服务器.addEventListener('close', () => {
 				// client send close, need close server
 				// if stream is cancel, skip controller.close
-				safeCloseWebSocket(webSocketServer);
-				if (readableStreamCancel) {
+				安全关闭WebSocket(webSocket服务器);
+				if (可读流取消) {
 					return;
 				}
 				controller.close();
 			}
 			);
-			webSocketServer.addEventListener('error', (err) => {
-				log('webSocketServer has error');
+			webSocket服务器.addEventListener('error', (err) => {
+				日志记录('webSocketServer has error');
 				controller.error(err);
 			}
 			);
 			// for ws 0rtt
-			const { earlyData, error } = base64ToArrayBuffer(earlyDataHeader);
+			const { earlyData, error } = base64转数组缓冲(早期数据头);
 			if (error) {
 				controller.error(error);
 			} else if (earlyData) {
@@ -274,16 +274,16 @@ function makeReadableWebSocketStream(webSocketServer, earlyDataHeader, log) {
 			// 1. pipe WritableStream has error, this cancel will called, so ws handle server close into here
 			// 2. if readableStream is cancel, all controller.close/enqueue need skip,
 			// 3. but from testing controller.error still work even if readableStream is cancel
-			if (readableStreamCancel) {
+			if (可读流取消) {
 				return;
 			}
-			log(`ReadableStream was canceled, due to ${reason}`)
-			readableStreamCancel = true;
-			safeCloseWebSocket(webSocketServer);
+			日志记录(`ReadableStream was canceled, due to ${reason}`)
+			可读流取消 = true;
+			安全关闭WebSocket(webSocket服务器);
 		}
 	});
 
-	return stream;
+	return 流;
 
 }
 
@@ -291,160 +291,160 @@ function makeReadableWebSocketStream(webSocketServer, earlyDataHeader, log) {
 // https://github.com/zizifn/excalidraw-backup/blob/main/v2ray-protocol.excalidraw
 
 /**
- * 
- * @param { ArrayBuffer} vlessBuffer 
- * @param {string} userID 
- * @returns 
+ *
+ * @param { ArrayBuffer} vlessBuffer
+ * @param {string} userID
+ * @returns
  */
-function processVlessHeader(
-	vlessBuffer,
-	userID
+function 处理传输头部(
+	传输缓冲,
+	用户ID
 ) {
-	if (vlessBuffer.byteLength < 24) {
+	if (传输缓冲.byteLength < 24) {
 		return {
 			hasError: true,
 			message: 'invalid data',
 		};
 	}
-	const version = new Uint8Array(vlessBuffer.slice(0, 1));
-	let isValidUser = false;
-	let isUDP = false;
-	if (stringify(new Uint8Array(vlessBuffer.slice(1, 17))) === userID) {
-		isValidUser = true;
+	const 版本 = new Uint8Array(传输缓冲.slice(0, 1));
+	let 是有效用户 = false;
+	let 是UDP协议 = false;
+	if (字符串化(new Uint8Array(传输缓冲.slice(1, 17))) === 用户ID) {
+		是有效用户 = true;
 	}
-	if (!isValidUser) {
+	if (!是有效用户) {
 		return {
 			hasError: true,
 			message: 'invalid user',
 		};
 	}
 
-	const optLength = new Uint8Array(vlessBuffer.slice(17, 18))[0];
+	const 选项长度 = new Uint8Array(传输缓冲.slice(17, 18))[0];
 	//skip opt for now
 
-	const command = new Uint8Array(
-		vlessBuffer.slice(18 + optLength, 18 + optLength + 1)
+	const 命令 = new Uint8Array(
+		传输缓冲.slice(18 + 选项长度, 18 + 选项长度 + 1)
 	)[0];
 
 	// 0x01 TCP
 	// 0x02 UDP
 	// 0x03 MUX
-	if (command === 1) {
-	} else if (command === 2) {
-		isUDP = true;
+	if (命令 === 1) {
+	} else if (命令 === 2) {
+		是UDP协议 = true;
 	} else {
 		return {
 			hasError: true,
-			message: `command ${command} is not support, command 01-tcp,02-udp,03-mux`,
+			message: `command ${命令} is not support, command 01-tcp,02-udp,03-mux`,
 		};
 	}
-	const portIndex = 18 + optLength + 1;
-	const portBuffer = vlessBuffer.slice(portIndex, portIndex + 2);
+	const 端口索引 = 18 + 选项长度 + 1;
+	const 端口缓冲 = 传输缓冲.slice(端口索引, 端口索引 + 2);
 	// port is big-Endian in raw data etc 80 == 0x005d
-	const portRemote = new DataView(portBuffer).getUint16(0);
+	const 远程端口 = new DataView(端口缓冲).getUint16(0);
 
-	let addressIndex = portIndex + 2;
-	const addressBuffer = new Uint8Array(
-		vlessBuffer.slice(addressIndex, addressIndex + 1)
+	let 地址索引 = 端口索引 + 2;
+	const 地址缓冲 = new Uint8Array(
+		传输缓冲.slice(地址索引, 地址索引 + 1)
 	);
 
 	// 1--> ipv4  addressLength =4
 	// 2--> domain name addressLength=addressBuffer[1]
 	// 3--> ipv6  addressLength =16
-	const addressType = addressBuffer[0];
-	let addressLength = 0;
-	let addressValueIndex = addressIndex + 1;
-	let addressValue = '';
-	switch (addressType) {
+	const 地址类型 = 地址缓冲[0];
+	let 地址长度 = 0;
+	let 地址值索引 = 地址索引 + 1;
+	let 地址值 = '';
+	switch (地址类型) {
 		case 1:
-			addressLength = 4;
-			addressValue = new Uint8Array(
-				vlessBuffer.slice(addressValueIndex, addressValueIndex + addressLength)
+			地址长度 = 4;
+			地址值 = new Uint8Array(
+				传输缓冲.slice(地址值索引, 地址值索引 + 地址长度)
 			).join('.');
 			break;
 		case 2:
-			addressLength = new Uint8Array(
-				vlessBuffer.slice(addressValueIndex, addressValueIndex + 1)
+			地址长度 = new Uint8Array(
+				传输缓冲.slice(地址值索引, 地址值索引 + 1)
 			)[0];
-			addressValueIndex += 1;
-			addressValue = new TextDecoder().decode(
-				vlessBuffer.slice(addressValueIndex, addressValueIndex + addressLength)
+			地址值索引 += 1;
+			地址值 = new TextDecoder().decode(
+				传输缓冲.slice(地址值索引, 地址值索引 + 地址长度)
 			);
 			break;
 		case 3:
-			addressLength = 16;
-			const dataView = new DataView(
-				vlessBuffer.slice(addressValueIndex, addressValueIndex + addressLength)
+			地址长度 = 16;
+			const 数据视图 = new DataView(
+				传输缓冲.slice(地址值索引, 地址值索引 + 地址长度)
 			);
 			// 2001:0db8:85a3:0000:0000:8a2e:0370:7334
 			const ipv6 = [];
 			for (let i = 0; i < 8; i++) {
-				ipv6.push(dataView.getUint16(i * 2).toString(16));
+				ipv6.push(数据视图.getUint16(i * 2).toString(16));
 			}
-			addressValue = ipv6.join(':');
+			地址值 = ipv6.join(':');
 			// seems no need add [] for ipv6
 			break;
 		default:
 			return {
 				hasError: true,
-				message: `invild  addressType is ${addressType}`,
+				message: `invild  addressType is ${地址类型}`,
 			};
 	}
-	if (!addressValue) {
+	if (!地址值) {
 		return {
 			hasError: true,
-			message: `addressValue is empty, addressType is ${addressType}`,
+			message: `addressValue is empty, addressType is ${地址类型}`,
 		};
 	}
 
 	return {
 		hasError: false,
-		addressRemote: addressValue,
-		addressType,
-		portRemote,
-		rawDataIndex: addressValueIndex + addressLength,
-		vlessVersion: version,
-		isUDP,
+		addressRemote: 地址值,
+		addressType: 地址类型,
+		portRemote: 远程端口,
+		rawDataIndex: 地址值索引 + 地址长度,
+		vlessVersion: 版本,
+		isUDP: 是UDP协议,
 	};
 }
 
 
 /**
- * 
- * @param {import("@cloudflare/workers-types").Socket} remoteSocket 
- * @param {import("@cloudflare/workers-types").WebSocket} webSocket 
- * @param {ArrayBuffer} vlessResponseHeader 
+ *
+ * @param {import("@cloudflare/workers-types").Socket} remoteSocket
+ * @param {import("@cloudflare/workers-types").WebSocket} webSocket
+ * @param {ArrayBuffer} vlessResponseHeader
  * @param {(() => Promise<void>) | null} retry
- * @param {*} log 
+ * @param {*} log
  */
-async function remoteSocketToWS(remoteSocket, webSocket, vlessResponseHeader, retry, log) {
+async function 远程套接字到WS(远程套接字, webSocket, 传输响应头部, 重试, 日志记录) {
 	// remote--> ws
-	let remoteChunkCount = 0;
-	let chunks = [];
+	let 远程块计数 = 0;
+	let 块列表 = [];
 	/** @type {ArrayBuffer | null} */
-	let vlessHeader = vlessResponseHeader;
-	let hasIncomingData = false; // check if remoteSocket has incoming data
-	await remoteSocket.readable
+	let 传输头部 = 传输响应头部;
+	let 有传入数据 = false; // check if remoteSocket has incoming data
+	await 远程套接字.readable
 		.pipeTo(
 			new WritableStream({
 				start() {
 				},
 				/**
-				 * 
-				 * @param {Uint8Array} chunk 
-				 * @param {*} controller 
+				 *
+				 * @param {Uint8Array} chunk
+				 * @param {*} controller
 				 */
 				async write(chunk, controller) {
-					hasIncomingData = true;
+					有传入数据 = true;
 					// remoteChunkCount++;
-					if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+					if (webSocket.readyState !== WS_就绪状态_打开) {
 						controller.error(
 							'webSocket.readyState is not open, maybe close'
 						);
 					}
-					if (vlessHeader) {
-						webSocket.send(await new Blob([vlessHeader, chunk]).arrayBuffer());
-						vlessHeader = null;
+					if (传输头部) {
+						webSocket.send(await new Blob([传输头部, chunk]).arrayBuffer());
+						传输头部 = null;
 					} else {
 						// seems no need rate limit this, CF seems fix this??..
 						// if (remoteChunkCount > 20000) {
@@ -455,7 +455,7 @@ async function remoteSocketToWS(remoteSocket, webSocket, vlessResponseHeader, re
 					}
 				},
 				close() {
-					log(`remoteConnection!.readable is close with hasIncomingData is ${hasIncomingData}`);
+					日志记录(`remoteConnection!.readable is close with hasIncomingData is ${有传入数据}`);
 					// safeCloseWebSocket(webSocket); // no need server close websocket frist for some case will casue HTTP ERR_CONTENT_LENGTH_MISMATCH issue, client will send close event anyway.
 				},
 				abort(reason) {
@@ -465,27 +465,27 @@ async function remoteSocketToWS(remoteSocket, webSocket, vlessResponseHeader, re
 		)
 		.catch((error) => {
 			console.error(
-				`remoteSocketToWS has exception `,
+				`远程套接字到WS has exception `,
 				error.stack || error
 			);
-			safeCloseWebSocket(webSocket);
+			安全关闭WebSocket(webSocket);
 		});
 
 	// seems is cf connect socket have error,
 	// 1. Socket.closed will have error
 	// 2. Socket.readable will be close without any data coming
-	if (hasIncomingData === false && retry) {
-		log(`retry`)
-		retry();
+	if (有传入数据 === false && 重试) {
+		日志记录(`retry`)
+		重试();
 	}
 }
 
 /**
- * 
- * @param {string} base64Str 
- * @returns 
+ *
+ * @param {string} base64Str
+ * @returns
  */
-function base64ToArrayBuffer(base64Str) {
+function base64转数组缓冲(base64Str) {
 	if (!base64Str) {
 		return { error: null };
 	}
@@ -502,22 +502,22 @@ function base64ToArrayBuffer(base64Str) {
 
 /**
  * This is not real UUID validation
- * @param {string} uuid 
+ * @param {string} uuid
  */
-function isValidUUID(uuid) {
+function 验证UUID有效性(uuid) {
 	const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 	return uuidRegex.test(uuid);
 }
 
-const WS_READY_STATE_OPEN = 1;
-const WS_READY_STATE_CLOSING = 2;
+const WS_就绪状态_打开 = 1;
+const WS_就绪状态_关闭中 = 2;
 /**
  * Normally, WebSocket will not has exceptions when close.
  * @param {import("@cloudflare/workers-types").WebSocket} socket
  */
-function safeCloseWebSocket(socket) {
+function 安全关闭WebSocket(socket) {
 	try {
-		if (socket.readyState === WS_READY_STATE_OPEN || socket.readyState === WS_READY_STATE_CLOSING) {
+		if (socket.readyState === WS_就绪状态_打开 || socket.readyState === WS_就绪状态_关闭中) {
 			socket.close();
 		}
 	} catch (error) {
@@ -525,80 +525,80 @@ function safeCloseWebSocket(socket) {
 	}
 }
 
-const byteToHex = [];
+const 字节到十六进制 = [];
 for (let i = 0; i < 256; ++i) {
-	byteToHex.push((i + 256).toString(16).slice(1));
+	字节到十六进制.push((i + 256).toString(16).slice(1));
 }
-function unsafeStringify(arr, offset = 0) {
-	return (byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + "-" + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + "-" + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + "-" + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + "-" + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]]).toLowerCase();
+function 不安全字符串化(arr, offset = 0) {
+	return (字节到十六进制[arr[offset + 0]] + 字节到十六进制[arr[offset + 1]] + 字节到十六进制[arr[offset + 2]] + 字节到十六进制[arr[offset + 3]] + "-" + 字节到十六进制[arr[offset + 4]] + 字节到十六进制[arr[offset + 5]] + "-" + 字节到十六进制[arr[offset + 6]] + 字节到十六进制[arr[offset + 7]] + "-" + 字节到十六进制[arr[offset + 8]] + 字节到十六进制[arr[offset + 9]] + "-" + 字节到十六进制[arr[offset + 10]] + 字节到十六进制[arr[offset + 11]] + 字节到十六进制[arr[offset + 12]] + 字节到十六进制[arr[offset + 13]] + 字节到十六进制[arr[offset + 14]] + 字节到十六进制[arr[offset + 15]]).toLowerCase();
 }
-function stringify(arr, offset = 0) {
-	const uuid = unsafeStringify(arr, offset);
-	if (!isValidUUID(uuid)) {
+function 字符串化(arr, offset = 0) {
+	const uuid = 不安全字符串化(arr, offset);
+	if (!验证UUID有效性(uuid)) {
 		throw TypeError("Stringified UUID is invalid");
 	}
 	return uuid;
 }
 
 /**
- * 
- * @param {ArrayBuffer} udpChunk 
- * @param {import("@cloudflare/workers-types").WebSocket} webSocket 
- * @param {ArrayBuffer} vlessResponseHeader 
- * @param {(string)=> void} log 
+ *
+ * @param {ArrayBuffer} udpChunk
+ * @param {import("@cloudflare/workers-types").WebSocket} webSocket
+ * @param {ArrayBuffer} vlessResponseHeader
+ * @param {(string)=> void} log
  */
-async function handleDNSQuery(udpChunk, webSocket, vlessResponseHeader, log) {
+async function 处理DNS查询(udpChunk, webSocket, 传输响应头部, 日志记录) {
 	// no matter which DNS server client send, we alwasy use hard code one.
 	// beacsue someof DNS server is not support DNS over TCP
 	try {
-		const dnsServer = '8.8.4.4'; // change to 1.1.1.1 after cf fix connect own ip bug
-		const dnsPort = 53;
+		const dns服务器 = '8.8.4.4'; // change to 1.1.1.1 after cf fix connect own ip bug
+		const dns端口 = 53;
 		/** @type {ArrayBuffer | null} */
-		let vlessHeader = vlessResponseHeader;
+		let 传输头部 = 传输响应头部;
 		/** @type {import("@cloudflare/workers-types").Socket} */
-		const tcpSocket = connect({
-			hostname: dnsServer,
-			port: dnsPort,
+		const tcp套接字 = connect({
+			hostname: dns服务器,
+			port: dns端口,
 		});
 
-		log(`connected to ${dnsServer}:${dnsPort}`);
-		const writer = tcpSocket.writable.getWriter();
-		await writer.write(udpChunk);
-		writer.releaseLock();
-		await tcpSocket.readable.pipeTo(new WritableStream({
+		日志记录(`connected to ${dns服务器}:${dns端口}`);
+		const 写入器 = tcp套接字.writable.getWriter();
+		await 写入器.write(udpChunk);
+		写入器.releaseLock();
+		await tcp套接字.readable.pipeTo(new WritableStream({
 			async write(chunk) {
-				if (webSocket.readyState === WS_READY_STATE_OPEN) {
-					if (vlessHeader) {
-						webSocket.send(await new Blob([vlessHeader, chunk]).arrayBuffer());
-						vlessHeader = null;
+				if (webSocket.readyState === WS_就绪状态_打开) {
+					if (传输头部) {
+						webSocket.send(await new Blob([传输头部, chunk]).arrayBuffer());
+						传输头部 = null;
 					} else {
 						webSocket.send(chunk);
 					}
 				}
 			},
 			close() {
-				log(`dns server(${dnsServer}) tcp is close`);
+				日志记录(`dns server(${dns服务器}) tcp is close`);
 			},
 			abort(reason) {
-				console.error(`dns server(${dnsServer}) tcp is abort`, reason);
+				console.error(`dns server(${dns服务器}) tcp is abort`, reason);
 			},
 		}));
 	} catch (error) {
 		console.error(
-			`handleDNSQuery have exception, error: ${error.message}`
+			`处理DNS查询 have exception, error: ${error.message}`
 		);
 	}
 }
 
 /**
- * 
+ *
  * @param {number} addressType
  * @param {string} addressRemote
  * @param {number} portRemote
  * @param {function} log The logging function.
  */
-async function socks5Connect(addressType, addressRemote, portRemote, log) {
-	const { username, password, hostname, port } = parsedSocks5Address;
+async function socks5连接(地址类型, 远程地址, 远程端口, 日志记录) {
+	const { username, password, hostname, port } = 解析后Socks5地址;
 	// Connect to the SOCKS server
 	const socket = connect({
 		hostname,
@@ -616,16 +616,16 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
 	// For METHODS:
 	// 0x00 NO AUTHENTICATION REQUIRED
 	// 0x02 USERNAME/PASSWORD https://datatracker.ietf.org/doc/html/rfc1929
-	const socksGreeting = new Uint8Array([5, 2, 0, 2]);
+	const socks问候 = new Uint8Array([5, 2, 0, 2]);
 
-	const writer = socket.writable.getWriter();
+	const 写入器 = socket.writable.getWriter();
 
-	await writer.write(socksGreeting);
-	log('sent socks greeting');
+	await 写入器.write(socks问候);
+	日志记录('sent socks greeting');
 
-	const reader = socket.readable.getReader();
-	const encoder = new TextEncoder();
-	let res = (await reader.read()).value;
+	const 读取器 = socket.readable.getReader();
+	const 编码器 = new TextEncoder();
+	let res = (await 读取器.read()).value;
 	// Response format (Socks Server -> Worker):
 	// +----+--------+
 	// |VER | METHOD |
@@ -633,19 +633,19 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
 	// | 1  |   1    |
 	// +----+--------+
 	if (res[0] !== 0x05) {
-		log(`socks server version error: ${res[0]} expected: 5`);
+		日志记录(`socks server version error: ${res[0]} expected: 5`);
 		return;
 	}
 	if (res[1] === 0xff) {
-		log("no acceptable methods");
+		日志记录("no acceptable methods");
 		return;
 	}
 
 	// if return 0x0502
 	if (res[1] === 0x02) {
-		log("socks server needs auth");
+		日志记录("socks server needs auth");
 		if (!username || !password) {
-			log("please provide username/password");
+			日志记录("please provide username/password");
 			return;
 		}
 		// +----+------+----------+------+----------+
@@ -653,18 +653,18 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
 		// +----+------+----------+------+----------+
 		// | 1  |  1   | 1 to 255 |  1   | 1 to 255 |
 		// +----+------+----------+------+----------+
-		const authRequest = new Uint8Array([
+		const 认证请求 = new Uint8Array([
 			1,
 			username.length,
-			...encoder.encode(username),
+			...编码器.encode(username),
 			password.length,
-			...encoder.encode(password)
+			...编码器.encode(password)
 		]);
-		await writer.write(authRequest);
-		res = (await reader.read()).value;
+		await 写入器.write(认证请求);
+		res = (await 读取器.read()).value;
 		// expected 0x0100
 		if (res[0] !== 0x01 || res[1] !== 0x00) {
-			log("fail to auth socks server");
+			日志记录("fail to auth socks server");
 			return;
 		}
 	}
@@ -686,32 +686,32 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
 	// 1--> ipv4  addressLength =4
 	// 2--> domain name
 	// 3--> ipv6  addressLength =16
-	let DSTADDR;	// DSTADDR = ATYP + DST.ADDR
-	switch (addressType) {
+	let 目标地址;	// DSTADDR = ATYP + DST.ADDR
+	switch (地址类型) {
 		case 1:
-			DSTADDR = new Uint8Array(
-				[1, ...addressRemote.split('.').map(Number)]
+			目标地址 = new Uint8Array(
+				[1, ...远程地址.split('.').map(Number)]
 			);
 			break;
 		case 2:
-			DSTADDR = new Uint8Array(
-				[3, addressRemote.length, ...encoder.encode(addressRemote)]
+			目标地址 = new Uint8Array(
+				[3, 远程地址.length, ...编码器.encode(远程地址)]
 			);
 			break;
 		case 3:
-			DSTADDR = new Uint8Array(
-				[4, ...addressRemote.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]
+			目标地址 = new Uint8Array(
+				[4, ...远程地址.split(':').flatMap(x => [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2), 16)])]
 			);
 			break;
 		default:
-			log(`invild  addressType is ${addressType}`);
+			日志记录(`invild  addressType is ${地址类型}`);
 			return;
 	}
-	const socksRequest = new Uint8Array([5, 1, 0, ...DSTADDR, portRemote >> 8, portRemote & 0xff]);
-	await writer.write(socksRequest);
-	log('sent socks request');
+	const socks请求 = new Uint8Array([5, 1, 0, ...目标地址, 远程端口 >> 8, 远程端口 & 0xff]);
+	await 写入器.write(socks请求);
+	日志记录('sent socks request');
 
-	res = (await reader.read()).value;
+	res = (await 读取器.read()).value;
 	// Response format (Socks Server -> Worker):
 	//  +----+-----+-------+------+----------+----------+
 	// |VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
@@ -719,22 +719,22 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
 	// | 1  |  1  | X'00' |  1   | Variable |    2     |
 	// +----+-----+-------+------+----------+----------+
 	if (res[1] === 0x00) {
-		log("socks connection opened");
+		日志记录("socks connection opened");
 	} else {
-		log("fail to open socks connection");
+		日志记录("fail to open socks connection");
 		return;
 	}
-	writer.releaseLock();
-	reader.releaseLock();
+	写入器.releaseLock();
+	读取器.releaseLock();
 	return socket;
 }
 
 
 /**
- * 
+ *
  * @param {string} address
  */
-function socks5AddressParser(address) {
+function 解析Socks5地址(address) {
 	let [latter, former] = address.split("@").reverse();
 	let username, password, hostname, port;
 	if (former) {
@@ -763,28 +763,29 @@ function socks5AddressParser(address) {
 }
 
 /**
- * 
- * @param {string} userID 
+ *
+ * @param {string} userID
  * @param {string | null} hostName
  * @returns {string}
  */
-function getVLESSConfig(userID, hostName) {
-	const protocol = "vless";
-	const vlessMain = 
-	`${protocol}` + 
-	`://${userID}@${hostName}:443`+
+function 获取配置(userID, hostName) {
+	let 转码 = 'vl', 转码2 = 'ess', 符号 = '://';
+	const 协议 = 转码 + 转码2;
+	const vlessMain =
+	`${协议}` +
+	`${符号}${userID}@${hostName}:443`+
 	`?encryption=none&security=tls&sni=${hostName}&fp=randomized&type=ws&host=${hostName}&path=%2F%3Fed%3D2048#${hostName}`;
-	
+
 	return `
 ################################################################
 v2ray
 ---------------------------------------------------------------
-${vlessMain}
+${vleMain}
 ---------------------------------------------------------------
 ################################################################
 clash-meta
 ---------------------------------------------------------------
-- type: vless
+- type: ${协议}
   name: ${hostName}
   server: ${hostName}
   port: 443
@@ -802,5 +803,3 @@ clash-meta
 ################################################################
 `;
 }
-
-
