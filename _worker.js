@@ -13,7 +13,7 @@ let socks5地址 = ''; // 兼容旧的 env.SOCKS5
 
 // Added variables
 let 隐藏订阅 = false; // 开启 true ━ 关闭false
-let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿"; // 此变量将不再用于隐藏订阅的场景
+let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿"; // 此变量现在将再次用于隐藏订阅的场景
 let 启用SOCKS5反代 = true; // 默认关闭，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
 let 启用SOCKS5全局反代 = true; // 默认关闭，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
 let 我的SOCKS5账号 = ''; // 存储 SOCKS5_ADDRESS 的值
@@ -28,7 +28,7 @@ let 启用Socks = false; // 默认关闭，在 fetch 中根据配置判断是否
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
-	 * @param {{UUID: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string, '隐藏订阅'?: string}} env
+	 * @param {{UUID: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string, '隐藏订阅'?: string, MOCKING_PHRASE?: string, '嘲讽语'?: string}} env
 	 * @param {import("@cloudflare/workers-types").ExecutionContext} ctx
 	 * @returns {Promise<Response>}
 	 */
@@ -39,6 +39,9 @@ export default {
 			
 			// 读取 隐藏订阅 环境变量，使用中文变量名
 			隐藏订阅 = 读取环境变量('隐藏订阅', 隐藏订阅, env);
+            // 读取自定义嘲讽语，可以设置英文的 MOCKING_PHRASE 或 中文的 嘲讽语
+            嘲讽语 = 读取环境变量('MOCKING_PHRASE', 嘲讽语, env);
+            嘲讽语 = 读取环境变量('嘲讽语', 嘲讽语, env); // 允许使用中文变量名设置嘲讽语
 
 			// 读取SOCKS5相关的环境变量
 			// 注意这里的读取顺序，我们先尝试读取 SOCKS5_ADDRESS
@@ -76,8 +79,8 @@ export default {
 						return new Response(JSON.stringify(request.cf), { status: 200 });
 					case `/${用户ID}`: {
 						if (隐藏订阅) {
-							// 不显示嘲讽语，返回 404 Not Found
-							return new Response('Not found', { status: 404 });
+							// 当隐藏订阅开启时，显示自定义嘲讽语
+							return new Response(嘲讽语, { status: 200 }); 
 						}
 						const vless配置 = 获取配置(用户ID, request.headers.get('Host'));
 						return new Response(`${vless配置}`, {
@@ -225,7 +228,7 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 		const 写入器 = tcp套接字.writable.getWriter()
 		await 写入器.write(原始客户端数据); // first write, normal is tls client hello
 		写入器.releaseLock();
-		return tcp套接字;
+		return tcp套接켓;
 	}
 
 	// if the cf connect tcp socket have no incoming data, we retry to redirect ip
@@ -884,4 +887,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-	    }
+}
