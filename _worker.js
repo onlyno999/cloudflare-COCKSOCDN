@@ -6,7 +6,11 @@ import { connect } from 'cloudflare:sockets';
 // [Windows] 按 "Win + R", 输入 cmd 并运行: Powershell -NoExit -Command "[guid]::NewGuid()"
 let 用户ID = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
 
+// 重新引入 代理IP 变量，用于作为 SOCKS5 失败后的备用直连地址
+let 代理IP = ''; 
+
 // 用户名和密码不包含特殊字符
+// 设置地址将忽略 代理IP
 // 示例: user:pass@host:port 或 host:port
 let socks5地址 = ''; // 兼容旧的 env.SOCKS5
 
@@ -27,13 +31,15 @@ let 启用Socks = false; // 默认关闭，在 fetch 中根据配置判断是否
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
-	 * @param {{UUID: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string, HIDE_SUB?: string}} env
+	 * @param {{UUID: string, PROXYIP: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string, HIDE_SUB?: string}} env
 	 * @param {import("@cloudflare/workers-types").ExecutionContext} ctx
 	 * @returns {Promise<Response>}
 	 */
 	async fetch(request, env, ctx) {
 		try {
 			用户ID = env.UUID || 用户ID;
+            // 重新引入：从环境变量读取 代理IP
+			代理IP = env.PROXYIP || 代理IP; 
 			socks5地址 = env.SOCKS5 || socks5地址; // 兼容旧的 env.SOCKS5
 
             // 新增：读取 隐藏订阅 环境变量
@@ -230,14 +236,14 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 
 	// if the cf connect tcp socket have no incoming data, we retry to redirect ip
 	async function 重试连接() {
-		// 这里重试逻辑也应该遵循 SOCKS5 配置
+		// 优先 SOCKS5，然后是 代理IP，最后是直连远程地址
 		if (启用Socks && (启用SOCKS5全局反代 || 启用SOCKS5反代)) {
-			tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
-		} else {
-			// 移除了代理IP的重试逻辑
-			tcp套接字 = await 连接并写入(远程地址, 远程端口);
+			tcp套接字 = await 连接并写入(远程地址, 远程端口, true); // 尝试 SOCKS5
+		} else if (代理IP && 代理IP !== '') { 
+            tcp套接字 = await 连接并写入(代理IP, 远程端口); // 尝试 代理IP
+        } else {
+			tcp套接字 = await 连接并写入(远程地址, 远程端口); // 最后尝试直连远程地址
 		}
-		// no matter retry success or not, close websocket
 		tcp套接字.closed.catch(error => {
 			console.log('retry tcpSocket closed error', error);
 		}).finally(() => {
@@ -247,14 +253,15 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 	}
 
 	let tcp套接字;
-	// 调整这里的判断，确保只有在 `启用Socks` 为 true 且相关 SOCKS5 标志也为 true 时才尝试 SOCKS5 连接
+    // 优先 SOCKS5，然后是 代理IP，最后是直连远程地址
 	if (启用Socks && (启用SOCKS5反代 && 启用SOCKS5全局反代)) {
-		tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
-	} else if (启用Socks && 启用SOCKS5反代) { // 如果只启用了反代但不是全局
-		tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
-	} else {
-		// 移除了代理IP的连接逻辑
-		tcp套接字 = await 连接并写入(远程地址, 远程端口);
+		tcp套接字 = await 连接并写入(远程地址, 远程端口, true); // 尝试 SOCKS5 (全局)
+	} else if (启用Socks && 启用SOCKS5反代) {
+		tcp套接字 = await 连接并写入(远程地址, 远程端口, true); // 尝试 SOCKS5 (非全局)
+	} else if (代理IP && 代理IP !== '') { 
+        tcp套接字 = await 连接并写入(代理IP, 远程端口); // 尝试 代理IP
+    } else {
+		tcp套接字 = await 连接并写入(远程地址, 远程端口); // 最后尝试直连远程地址
 	}
 
 	// when remoteSocket is ready, pass to websocket
@@ -884,4 +891,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-					   }
+}
