@@ -13,29 +13,26 @@ let proxyIP = '';
 // Example:  user:pass@host:port  or  host:port
 let socks5Address = '';
 
-// External variable for SOCKS5 address, enabled by default
-let SOCKS5_ADDRESS = ''; // Default to empty string, can be set via env.SOCKS5
-
 // 新增SOCKS5相关配置
-let 启用SOCKS5反代 = true; // 选择是否启用SOCKS5反代功能，true启用，false不启用，可以通过环境变量SOCKS5_ENABLE控制
-let 启用SOCKS5全局反代 = true; // 选择是否启用SOCKS5全局反代，启用后所有访问都是S5的落地，可以通过环境变量SOCKS5_GLOBAL控制
-let 我的SOCKS5账号 = ''; // 格式'账号:密码@地址:端口'，可以通过环境变量SOCKS5_ADDRESS控制
+let enableSocks5Proxy = true; // 选择是否启用SOCKS5反代功能，true启用，false不启用，可以通过环境变量SOCKS5_ENABLE控制
+let enableSocks5GlobalProxy = true; // 选择是否启用SOCKS5全局反代，启用后所有访问都是S5的落地，可以通过环境变量SOCKS5_GLOBAL控制
+let mySocks5Account = ''; // 格式'账号:密码@地址:端口'，可以通过环境变量SOCKS5_ADDRESS控制
 
-// 新增订阅隐藏和嘲讽语配置
-let 隐藏订阅 = false; // 开启 true ━ 关闭false，可以通过环境变量 HIDE_SUB 控制
-let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿"; // 可以通过环境变量 MOCK_TEXT 控制
+// 新增订阅隐藏配置
+let hideSubscription = false; // 开启 true ━ 关闭false
+let tauntMessage = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿";
 
 if (!isValidUUID(userID)) {
 	throw new Error('uuid is not valid');
 }
 
-let parsedSocks5Address = {}; 
-// let enableSocks = true; // SOCKS5 is enabled by default - This line is replaced by 启用SOCKS5反代 and 启用SOCKS5全局反代
+let parsedSocks5Address = {};
+let enableSocks = false;
 
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
-	 * @param {{UUID: string, PROXYIP: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, HIDE_SUB?: string, MOCK_TEXT?: string}} env
+	 * @param {{UUID: string, PROXYIP: string, SOCKS5: string, SOCKS5_ENABLE: string, SOCKS5_GLOBAL: string, HIDE_SUB: string}} env
 	 * @param {import("@cloudflare/workers-types").ExecutionContext} ctx
 	 * @returns {Promise<Response>}
 	 */
@@ -43,37 +40,29 @@ export default {
 		try {
 			userID = env.UUID || userID;
 			proxyIP = env.PROXYIP || proxyIP;
-			socks5Address = env.SOCKS5 || socks5Address; // Kept for compatibility, though 我的SOCKS5账号 is the new main
-			
-			// 读取SOCKS5相关的环境变量
-			// 对于布尔值，需要从字符串 'true'/'false' 转换为真正的布尔类型
-			启用SOCKS5反代 = env.SOCKS5_ENABLE === 'false' ? false : true; // 默认是true
-			启用SOCKS5全局反代 = env.SOCKS5_GLOBAL === 'false' ? false : true; // 默认是true
-			我的SOCKS5账号 = env.SOCKS5_ADDRESS || 我的SOCKS5账号; // 默认是''
 
-			// 读取订阅隐藏和嘲讽语相关的环境变量
-			隐藏订阅 = env.HIDE_SUB === 'true' ? true : false; // 默认是false
-			嘲讽语 = env.MOCK_TEXT || 嘲讽语; // 默认是特定字符串
+			// 从环境变量获取SOCKS5配置
+			mySocks5Account = env.SOCKS5_ADDRESS || mySocks5Account;
+			enableSocks5Proxy = env.SOCKS5_ENABLE ? (env.SOCKS5_ENABLE.toLowerCase() === 'true') : enableSocks5Proxy;
+			enableSocks5GlobalProxy = env.SOCKS5_GLOBAL ? (env.SOCKS5_GLOBAL.toLowerCase() === 'true') : enableSocks5GlobalProxy;
 
-			// 如果我的SOCKS5账号有提供，它将作为socks5Address的主要来源
-			if (我的SOCKS5账号) {
-				socks5Address = 我的SOCKS5账号;
-			}
-			
-			let enableSocks = 启用SOCKS5反代; // 控制SOCKS5反代功能是否启用
+			// 如果启用了SOCKS5反代，则使用我的SOCKS5账号
+			socks5Address = enableSocks5Proxy ? mySocks5Account : '';
 
-			if (enableSocks && socks5Address) { // 只有在启用反代且地址存在时才尝试解析
+			if (socks5Address) {
 				try {
 					parsedSocks5Address = socks5AddressParser(socks5Address);
-					// enableSocks 在解析成功时保持 true
+					enableSocks = true;
 				} catch (err) {
   			/** @type {Error} */ let e = err;
 					console.log(e.toString());
-					enableSocks = false; // 解析失败时禁用SOCKS5
+					enableSocks = false;
 				}
-			} else {
-				enableSocks = false; // 如果没有明确启用反代或没有提供地址，则禁用SOCKS5
 			}
+
+			// 从环境变量获取订阅隐藏配置
+			hideSubscription = env.HIDE_SUB ? (env.HIDE_SUB.toLowerCase() === 'true') : hideSubscription;
+
 
 			const upgradeHeader = request.headers.get('Upgrade');
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
@@ -82,8 +71,8 @@ export default {
 					case '/':
 						return new Response(JSON.stringify(request.cf), { status: 200 });
 					case `/${userID}`: {
-						if (隐藏订阅) {
-							return new Response(嘲讽语, {
+						if (hideSubscription) {
+							return new Response(tauntMessage, {
 								status: 200,
 								headers: {
 									"Content-Type": "text/plain;charset=utf-8",
@@ -102,8 +91,7 @@ export default {
 						return new Response('Not found', { status: 404 });
 				}
 			} else {
-				// 将 enableSocks, 启用SOCKS5全局反代 和 proxyIP 传递给处理函数
-				return await vlessOverWSHandler(request, enableSocks, 启用SOCKS5全局反代, proxyIP);
+				return await vlessOverWSHandler(request);
 			}
 		} catch (err) {
 			/** @type {Error} */ let e = err;
@@ -116,12 +104,10 @@ export default {
 
 
 /**
- * * @param {import("@cloudflare/workers-types").Request} request
- * @param {boolean} enableSocks
- * @param {boolean} enableSOCKS5全局反代
- * @param {string} proxyIP
+ *
+ * @param {import("@cloudflare/workers-types").Request} request
  */
-async function vlessOverWSHandler(request, enableSocks, enableSOCKS5全局反代, proxyIP) {
+async function vlessOverWSHandler(request) {
 
 	/** @type {import("@cloudflare/workers-types").WebSocket[]} */
 	// @ts-ignore
@@ -194,7 +180,7 @@ async function vlessOverWSHandler(request, enableSocks, enableSOCKS5全局反代
 			if (isDns) {
 				return handleDNSQuery(rawClientData, webSocket, vlessResponseHeader, log);
 			}
-			handleTCPOutBound(remoteSocketWapper, addressType, addressRemote, portRemote, rawClientData, webSocket, vlessResponseHeader, log, enableSocks, enableSOCKS5全局反代, proxyIP);
+			handleTCPOutBound(remoteSocketWapper, addressType, addressRemote, portRemote, rawClientData, webSocket, vlessResponseHeader, log);
 		},
 		close() {
 			log(`readableWebSocketStream is close`);
@@ -224,12 +210,9 @@ async function vlessOverWSHandler(request, enableSocks, enableSOCKS5全局反代
  * @param {import("@cloudflare/workers-types").WebSocket} webSocket The WebSocket to pass the remote socket to.
  * @param {Uint8Array} vlessResponseHeader The VLESS response header.
  * @param {function} log The logging function.
- * @param {boolean} enableSocks
- * @param {boolean} enableSOCKS5全局反代
- * @param {string} proxyIP
  * @returns {Promise<void>} The remote socket.
  */
-async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, vlessResponseHeader, log, enableSocks, enableSOCKS5全局反代, proxyIP) {
+async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portRemote, rawClientData, webSocket, vlessResponseHeader, log,) {
 	async function connectAndWrite(address, port, socks = false) {
 		/** @type {import("@cloudflare/workers-types").Socket} */
 		const tcpSocket = socks ? await socks5Connect(addressType, address, port, log)
@@ -247,12 +230,9 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 
 	// if the cf connect tcp socket have no incoming data, we retry to redirect ip
 	async function retry() {
-		let tcpSocket;
-		if (enableSocks && enableSOCKS5全局反代) { // 如果SOCKS5反代和全局反代都启用，则总是通过SOCKS5连接
+		if (enableSocks) {
 			tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
-		} else if (enableSocks) { // 如果SOCKS5反代启用但不是全局反代，则通过SOCKS5连接
-			tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
-		} else { // 否则，使用proxyIP或直接连接
+		} else {
 			tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
 		}
 		// no matter retry success or not, close websocket
@@ -265,13 +245,12 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 	}
 
 	let tcpSocket;
-	if (enableSocks && enableSOCKS5全局反代) { // 如果SOCKS5反代和全局反代都启用，则总是通过SOCKS5连接
+	if (enableSocks5GlobalProxy && enableSocks) { // 如果启用了SOCKS5全局反代，且SOCKS5配置有效
 		tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
-	} else if (enableSocks) { // 如果SOCKS5反代启用但不是全局反代，则通过SOCKS5连接
-		tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
-	} else { // 否则，使用proxyIP或直接连接
-		tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
+	} else {
+		tcpSocket = await connectAndWrite(addressRemote, portRemote);
 	}
+
 
 	// when remoteSocket is ready, pass to websocket
 	// remote--> ws
@@ -279,7 +258,8 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 }
 
 /**
- * * @param {import("@cloudflare/workers-types").WebSocket} webSocketServer
+ *
+ * @param {import("@cloudflare/workers-types").WebSocket} webSocketServer
  * @param {string} earlyDataHeader for ws 0rtt
  * @param {(info: string)=> void} log for ws 0rtt
  */
@@ -347,9 +327,10 @@ function makeReadableWebSocketStream(webSocketServer, earlyDataHeader, log) {
 // https://github.com/zizifn/excalidraw-backup/blob/main/v2ray-protocol.excalidraw
 
 /**
- * * @param { ArrayBuffer} vlessBuffer 
- * @param {string} userID 
- * @returns 
+ *
+ * @param { ArrayBuffer} vlessBuffer
+ * @param {string} userID
+ * @returns
  */
 function processVlessHeader(
 	vlessBuffer,
@@ -465,11 +446,12 @@ function processVlessHeader(
 
 
 /**
- * * @param {import("@cloudflare/workers-types").Socket} remoteSocket 
- * @param {import("@cloudflare/workers-types").WebSocket} webSocket 
- * @param {ArrayBuffer} vlessResponseHeader 
+ *
+ * @param {import("@cloudflare/workers-types").Socket} remoteSocket
+ * @param {import("@cloudflare/workers-types").WebSocket} webSocket
+ * @param {ArrayBuffer} vlessResponseHeader
  * @param {(() => Promise<void>) | null} retry
- * @param {*} log 
+ * @param {*} log
  */
 async function remoteSocketToWS(remoteSocket, webSocket, vlessResponseHeader, retry, log) {
 	// remote--> ws
@@ -484,8 +466,9 @@ async function remoteSocketToWS(remoteSocket, webSocket, vlessResponseHeader, re
 				start() {
 				},
 				/**
-				 * * @param {Uint8Array} chunk 
-				 * @param {*} controller 
+				 *
+				 * @param {Uint8Array} chunk
+				 * @param {*} controller
 				 */
 				async write(chunk, controller) {
 					hasIncomingData = true;
@@ -534,8 +517,9 @@ async function remoteSocketToWS(remoteSocket, webSocket, vlessResponseHeader, re
 }
 
 /**
- * * @param {string} base64Str 
- * @returns 
+ *
+ * @param {string} base64Str
+ * @returns
  */
 function base64ToArrayBuffer(base64Str) {
 	if (!base64Str) {
@@ -554,7 +538,7 @@ function base64ToArrayBuffer(base64Str) {
 
 /**
  * This is not real UUID validation
- * @param {string} uuid 
+ * @param {string} uuid
  */
 function isValidUUID(uuid) {
 	const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -593,10 +577,11 @@ function stringify(arr, offset = 0) {
 }
 
 /**
- * * @param {ArrayBuffer} udpChunk 
- * @param {import("@cloudflare/workers-types").WebSocket} webSocket 
- * @param {ArrayBuffer} vlessResponseHeader 
- * @param {(string)=> void} log 
+ *
+ * @param {ArrayBuffer} udpChunk
+ * @param {import("@cloudflare/workers-types").WebSocket} webSocket
+ * @param {ArrayBuffer} vlessResponseHeader
+ * @param {(string)=> void} log
  */
 async function handleDNSQuery(udpChunk, webSocket, vlessResponseHeader, log) {
 	// no matter which DNS server client send, we alwasy use hard code one.
@@ -642,7 +627,8 @@ async function handleDNSQuery(udpChunk, webSocket, vlessResponseHeader, log) {
 }
 
 /**
- * * @param {number} addressType
+ *
+ * @param {number} addressType
  * @param {string} addressRemote
  * @param {number} portRemote
  * @param {function} log The logging function.
@@ -781,7 +767,8 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
 
 
 /**
- * * @param {string} address
+ *
+ * @param {string} address
  */
 function socks5AddressParser(address) {
 	let [latter, former] = address.split("@").reverse();
@@ -812,21 +799,21 @@ function socks5AddressParser(address) {
 }
 
 /**
- * * @param {string} userID 
+ *
+ * @param {string} userID
  * @param {string | null} hostName
  * @returns {string}
  */
 function getVLESSConfig(userID, hostName) {
-	const vl = 'vl';
-	const ess = 'ess';
-	const protocol = `${vl}${ess}`;
-	const symbol = '://';
-
-	const vlessMain = 
-	`${protocol}${symbol}` + 
-	`${userID}@${hostName}:443`+
+	let 转码 = 'vl';
+	let 转码2 = 'ess';
+	let 符号 = '://';
+	const protocol = `${转码}${转码2}`; // 组合 "vless"
+	const vlessMain =
+	`${protocol}` +
+	`${符号}${userID}@${hostName}:443`+
 	`?encryption=none&security=tls&sni=${hostName}&fp=randomized&type=ws&host=${hostName}&path=%2F%3Fed%3D2048#${hostName}`;
-	
+
 	return `
 ################################################################
 v2ray
@@ -836,7 +823,7 @@ ${vlessMain}
 ################################################################
 clash-meta
 ---------------------------------------------------------------
-- type: ${protocol}
+- type: vless
   name: ${hostName}
   server: ${hostName}
   port: 443
@@ -853,4 +840,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-}
+					 }
