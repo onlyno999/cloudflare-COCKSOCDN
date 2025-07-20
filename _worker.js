@@ -14,8 +14,8 @@ let socks5地址 = ''; // 兼容旧的 env.SOCKS5
 // Added variables
 let 隐藏订阅 = false; // 开启 true ━ 关闭false
 let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿"; // 此变量将不再用于隐藏订阅的场景
-let 启用SOCKS5反代 = false; // 默认关闭，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
-let 启用SOCKS5全局反代 = false; // 默认关闭，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
+let 启用SOCKS5反代 = true; // 默认关闭，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
+let 启用SOCKS5全局反代 = true; // 默认关闭，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
 let 我的SOCKS5账号 = ''; // 存储 SOCKS5_ADDRESS 的值
 
 if (!验证UUID有效性(用户ID)) {
@@ -28,7 +28,7 @@ let 启用Socks = false; // 默认关闭，在 fetch 中根据配置判断是否
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
-	 * @param {{UUID: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string}} env
+	 * @param {{UUID: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string, HIDE_SUBSCRIPTION?: string}} env
 	 * @param {import("@cloudflare/workers-types").ExecutionContext} ctx
 	 * @returns {Promise<Response>}
 	 */
@@ -36,6 +36,9 @@ export default {
 		try {
 			用户ID = env.UUID || 用户ID;
 			socks5地址 = env.SOCKS5 || socks5地址; // 兼容旧的 env.SOCKS5
+			
+			// 读取 隐藏订阅 环境变量
+			隐藏订阅 = 读取环境变量('HIDE_SUBSCRIPTION', 隐藏订阅, env);
 
 			// 读取SOCKS5相关的环境变量
 			// 注意这里的读取顺序，我们先尝试读取 SOCKS5_ADDRESS
@@ -222,7 +225,7 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 		const 写入器 = tcp套接字.writable.getWriter()
 		await 写入器.write(原始客户端数据); // first write, normal is tls client hello
 		写入器.releaseLock();
-		return tcp套接字;
+		return tcp套接켓;
 	}
 
 	// if the cf connect tcp socket have no incoming data, we retry to redirect ip
@@ -881,4 +884,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-							}
+}
