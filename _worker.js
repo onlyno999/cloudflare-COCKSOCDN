@@ -3,7 +3,7 @@
 import { connect } from 'cloudflare:sockets';
 
 // How to generate your own UUID:
-// [Windows] Press "Win + R", input cmd and run:  Powershell -NoExit -Command "[guid]::NewGuid()"
+// [Windows] Press "Win + R", input cmd and run:  Powershell -NoExit -Command "[guid]::NewGuid()"\
 let 用户ID = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
 
 // The user name and password do not contain special characters
@@ -13,9 +13,9 @@ let socks5地址 = ''; // 兼容旧的 env.SOCKS5
 
 // Added variables
 let 隐藏订阅 = false; // 开启 true ━ 关闭false
-let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿";
-let 启用SOCKS5反代 = true; // 默认开启/关闭false，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
-let 启用SOCKS5全局反代 = true; // 默认开启/关闭false，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
+let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿"; // 此变量将不再用于隐藏订阅的场景
+let 启用SOCKS5反代 = false; // 默认关闭，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
+let 启用SOCKS5全局反代 = false; // 默认关闭，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
 let 我的SOCKS5账号 = ''; // 存储 SOCKS5_ADDRESS 的值
 
 if (!验证UUID有效性(用户ID)) {
@@ -35,7 +35,6 @@ export default {
 	async fetch(request, env, ctx) {
 		try {
 			用户ID = env.UUID || 用户ID;
-			// 移除 代理IP = env.PROXYIP || 代理IP;
 			socks5地址 = env.SOCKS5 || socks5地址; // 兼容旧的 env.SOCKS5
 
 			// 读取SOCKS5相关的环境变量
@@ -74,7 +73,8 @@ export default {
 						return new Response(JSON.stringify(request.cf), { status: 200 });
 					case `/${用户ID}`: {
 						if (隐藏订阅) {
-							return new Response(嘲讽语, { status: 200 });
+							// 不显示嘲讽语，返回 404 Not Found
+							return new Response('Not found', { status: 404 });
 						}
 						const vless配置 = 获取配置(用户ID, request.headers.get('Host'));
 						return new Response(`${vless配置}`, {
@@ -881,4 +881,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-			 }
+							}
