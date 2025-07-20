@@ -6,8 +6,6 @@ import { connect } from 'cloudflare:sockets';
 // [Windows] Press "Win + R", input cmd and run:  Powershell -NoExit -Command "[guid]::NewGuid()"
 let 用户ID = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
 
-let 代理IP = '';
-
 // The user name and password do not contain special characters
 // Setting the address will ignore proxyIP
 // Example:  user:pass@host:port  or  host:port
@@ -16,8 +14,8 @@ let socks5地址 = ''; // 兼容旧的 env.SOCKS5
 // Added variables
 let 隐藏订阅 = false; // 开启 true ━ 关闭false
 let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿";
-let 启用SOCKS5反代 = true; // 默认关闭，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
-let 启用SOCKS5全局反代 = true; // 默认关闭，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
+let 启用SOCKS5反代 = true; // 默认开启/关闭false，除非配置了 SOCKS5_ENABLE 或 SOCKS5_ADDRESS
+let 启用SOCKS5全局反代 = true; // 默认开启/关闭false，除非配置了 SOCKS5_GLOBAL 或 SOCKS5_ADDRESS
 let 我的SOCKS5账号 = ''; // 存储 SOCKS5_ADDRESS 的值
 
 if (!验证UUID有效性(用户ID)) {
@@ -30,14 +28,14 @@ let 启用Socks = false; // 默认关闭，在 fetch 中根据配置判断是否
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
-	 * @param {{UUID: string, PROXYIP: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string}} env
+	 * @param {{UUID: string, SOCKS5_ENABLE?: string, SOCKS5_GLOBAL?: string, SOCKS5_ADDRESS?: string, SOCKS5?: string}} env
 	 * @param {import("@cloudflare/workers-types").ExecutionContext} ctx
 	 * @returns {Promise<Response>}
 	 */
 	async fetch(request, env, ctx) {
 		try {
 			用户ID = env.UUID || 用户ID;
-			代理IP = env.PROXYIP || 代理IP;
+			// 移除 代理IP = env.PROXYIP || 代理IP;
 			socks5地址 = env.SOCKS5 || socks5地址; // 兼容旧的 env.SOCKS5
 
 			// 读取SOCKS5相关的环境变量
@@ -233,7 +231,8 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 		if (启用Socks && (启用SOCKS5全局反代 || 启用SOCKS5反代)) {
 			tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
 		} else {
-			tcp套接字 = await 连接并写入(代理IP || 远程地址, 远程端口);
+			// 移除 代理IP 的逻辑，直接连接到远程地址
+			tcp套接字 = await 连接并写入(远程地址, 远程端口);
 		}
 		// no matter retry success or not, close websocket
 		tcp套接字.closed.catch(error => {
@@ -251,7 +250,8 @@ async function 处理TCP出站(远程套接字, 地址类型, 远程地址, 远�
 	} else if (启用Socks && 启用SOCKS5反代) { // 如果只启用了反代但不是全局
 		tcp套接字 = await 连接并写入(远程地址, 远程端口, true);
 	} else {
-		tcp套接字 = await 连接并写入(代理IP || 远程地址, 远程端口);
+		// 移除 代理IP 的逻辑，直接连接到远程地址
+		tcp套接字 = await 连接并写入(远程地址, 远程端口);
 	}
 
 	// when remoteSocket is ready, pass to websocket
@@ -881,4 +881,4 @@ clash-meta
 ---------------------------------------------------------------
 ################################################################
 `;
-		}
+			 }
