@@ -14,7 +14,6 @@
 //   私钥开关    可选，true|false，是否启用私钥认证
 //   嘲讽语      可选，隐藏订阅时返回的嘲讽语
 //   我的节点名字  可选，订阅中节点的默认名称
-//                   《注意事项》
 //   使用说明 变量 选填 SOCKS5_TXT_URL 需要提供远程.txt格式文件。
 //      SOCKS5_ADDRESS  无账号无密码:123456:1234直接填写IP加端口
 //       SOCKS5_ADDRESS   有账号的，严格按照账号密码。user:pass@127.0.0.1:1080
@@ -46,7 +45,7 @@ let 启用SOCKS5全局反代 = true; // 选择是否启用SOCKS5全局反代，�
 let 我的SOCKS5账号 = ''; // 格式'账号:密码@地址:端口'，可以通过环境变量SOCKS5_ADDRESS控制
 
 // 新增：SOCKS5 地址列表 URL
-let SOCKS5地址列表URL = 'https://raw.githubusercontent.com/onlyno999/cloudflare-COCKSOCN/main/socks.txt'; // 可以通过环境变量 SOCKS5_TXT_URL 控制
+let SOCKS5地址列表URL = ''; // 可以通过环境变量 SOCKS5_TXT_URL 控制
 
 // SOCKS5 地址池和当前索引 (在并发模式下，索引更多用于初始加载后的顺序，实际连接由 Promise.any 管理)
 let SOCKS5地址池 = [];
@@ -430,7 +429,7 @@ async function 创建SOCKS5接口连接(账号, 密码, S5地址, S5端口, 识�
     return SOCKS5接口;
   } catch (e) {
     if (传输数据) 传输数据.releaseLock();
-    if (读取数据) 读���数据.releaseLock();
+    if (读取数据) 读取数据.releaseLock();
     if (SOCKS5接口) SOCKS5接口.close();
     // 抛出错误以便上层 (尝试创建SOCKS5接口) 捕获并跳过
     throw e;
