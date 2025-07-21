@@ -25,7 +25,7 @@ let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气
 let 我的优选 = [];
 let 我的优选TXT = [''];
 
-let 我的节点名字 = 'Youtube专用版';
+let 我的节点名字 = 'SOCKS5版';
 
 // 新增SOCKS5相关配置
 let 启用SOCKS5反代 = true; // 选择是否启用SOCKS5反代功能，true启用，false不启用，可以通过环境变量SOCKS5_ENABLE控制
