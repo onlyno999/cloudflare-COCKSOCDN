@@ -25,7 +25,7 @@ import { connect } from 'cloudflare:sockets';
 let 转码 = 'vl', 转码2 = 'ess', 符号 = '://';
 
 //////////////////////////////////////////////////////////////////////////配置区块////////////////////////////////////////////////////////////////////////
-let 哎呀呀这是我的ID啊 = "123456"; // 订阅路径
+let 哎呀呀这是我的ID啊 = "onlyno999"; // 订阅路径
 let 哎呀呀这是我的VL密钥 = "25dce6e6-1c37-4e8c-806b-5ef8affd9f55"; // UUID
 
 let 私钥开关 = false;
@@ -45,7 +45,7 @@ let 启用SOCKS5全局反代 = true; // 选择是否启用SOCKS5全局反代，�
 let 我的SOCKS5账号 = ''; // 格式'账号:密码@地址:端口'，可以通过环境变量SOCKS5_ADDRESS控制
 
 // 新增：SOCKS5 地址列表 URL
-let SOCKS5地址列表URL = ''; // 可以通过环境变量 SOCKS5_TXT_URL 控制
+let SOCKS5地址列表URL = 'https://raw.githubusercontent.com/onlyno999/cloudflare-COCKSOCN/main/socks.txt'; // 可以通过环境变量 SOCKS5_TXT_URL 控制
 
 // SOCKS5 地址池和当前索引 (在并发模式下，索引更多用于初始加载后的顺序，实际连接由 Promise.any 管理)
 let SOCKS5地址池 = [];
