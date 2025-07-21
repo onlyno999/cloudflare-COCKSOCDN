@@ -1,5 +1,5 @@
 // ====================================================================
-// Cloudflare Worker: VL over WebSocket + SOCKS5
+// Cloudflare Worker: VL over WebSocket + SOCKS5版
 // --------------------------------------------------------------------
 // 环境变量 (Vars) 说明：
 //   UUID        必填，VL 用户的 UUID
