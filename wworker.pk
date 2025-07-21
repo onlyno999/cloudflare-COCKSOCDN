@@ -240,11 +240,12 @@ async function 创建SOCKS5接口(识别地址类型, 访问地址, 访问端口
     const 转换数组 = new TextEncoder();
 
     // SOCKS5 认证协商
-    const 构建S5认证 = new Uint8Array([5, 2, 0, 2]); // 支持无认证和用户名/密码认证
+    // Support no authentication (0x00) and username/password (0x02)
+    const 构建S5认证 = new Uint8Array([5, 2, 0, 2]);
     await 传输数据.write(构建S5认证);
     const 读取认证要求 = (await 读取数据.read()).value;
 
-    if (读取认证要求[1] === 0x02) { // 检查是否需要用户名/密码认证
+    if (读取认证要求[1] === 0x02) { // Username/Password authentication required
       if (!账号 || !密码) {
         throw new Error (`未配置SOCKS5账号密码`);
       }
@@ -254,6 +255,10 @@ async function 创建SOCKS5接口(识别地址类型, 访问地址, 访问端口
       if (读取账号密码认证结果[0] !== 0x01 || 读取账号密码认证结果[1] !== 0x00) {
         throw new Error (`SOCKS5账号密码错误`);
       }
+    } else if (读取认证要求[1] === 0x00) { // No authentication required
+        // Do nothing, proceed to connection
+    } else {
+        throw new Error (`SOCKS5认证方式不支持: ${读取认证要求[1]}`);
     }
 
     // SOCKS5 连接目标
