@@ -16,8 +16,8 @@
 //   我的节点名字  可选，订阅中节点的默认名称
 //   使用说明 变量 选填 SOCKS5_TXT_URL 需要提供远程.txt格式文件。
 //      SOCKS5_ADDRESS  无账号无密码:123456:1234直接填写IP加端口
-//       SOCKS5_ADDRESS   有账号的，严格按照账号密码。user:pass@127.0.0.1:1080
 //    可以设置单个帐号，多账号请用txt远程，每一行一个账号。
+//   TOKEN       新增，可选，用于在隐藏订阅时，通过 /ID/TOKEN 路径访问订阅。
 // ====================================================================
 
 import { connect } from 'cloudflare:sockets';
@@ -33,6 +33,7 @@ let 咦这是我的私钥哎 = "";
 
 let 隐藏订阅 = false; // 开启 true ━ 关闭false
 let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿";
+let 秘密令牌 = ""; // 新增：用于在隐藏订阅时，通过 /ID/TOKEN 访问
 
 let 我的优选 = []; // 可通过环境变量 IP 配置，也可以通过 TXT 配置
 let 我的优选TXT = ['']; // 可通过环境变量 TXT 配置，用于从远程文件加载优选 IP
@@ -127,6 +128,7 @@ export default {
     私钥开关 = 读取环境变量('私钥开关', 私钥开关, env);
     嘲讽语 = 读取环境变量('嘲讽语', 嘲讽语, env);
     我的节点名字 = 读取环境变量('我的节点名字', 我的节点名字, env);
+    秘密令牌 = 读取环境变量('TOKEN', 秘密令牌, env); // 读取新的 TOKEN 环境变量
 
     // 读取SOCKS5相关的环境变量
     启用SOCKS5反代 = 读取环境变量('SOCKS5_ENABLE', 启用SOCKS5反代, env);
@@ -139,6 +141,7 @@ export default {
 
     const 升级标头 = 访问请求.headers.get('Upgrade');
     const url = new URL(访问请求.url);
+    const pathSegments = url.pathname.split('/').filter(Boolean); // 分割路径并过滤空字符串
 
     if (!升级标头 || 升级标头 !== 'websocket') {
       // 非 WebSocket 请求处理 (订阅、Hello World)
@@ -157,6 +160,18 @@ export default {
         }
         if (所有节点.length > 0) 我的优选 = 所有节点;
       }
+
+      // 检查 /ID/TOKEN 路径
+      if (pathSegments.length === 2 && pathSegments[0] === 哎呀呀这是我的ID啊 && pathSegments[1] === 秘密令牌) {
+        if (秘密令牌 && 秘密令牌 !== '') { // 只有配置了TOKEN才允许通过此路径访问
+          const cfg = 给我通用配置文件(访问请求.headers.get('Host'));
+          return new Response(cfg, {
+            status: 200,
+            headers: { "Content-Type": "text/plain;charset=utf-8" }
+          });
+        }
+      }
+
       switch (url.pathname) {
         case `/${哎呀呀这是我的ID啊}`: {
           const sub = 给我订阅页面(哎呀呀这是我的ID啊, 访问请求.headers.get('Host'));
@@ -560,10 +575,12 @@ async function 查询最快IP(访问域名) {
 }
 
 function 给我订阅页面(ID, host) {
+  // 根据是否设置了秘密令牌来调整提示信息
+  const tokenHint = 秘密令牌 ? `\n3、您可以通过 ${host}/${ID}/${秘密令牌} 路径在隐藏订阅时访问。\n   请妥善保管您的TOKEN。` : '';
   return `
 1、本worker的私钥功能只支持通用订阅，其他请关闭私钥功能
 2、其他需求自行研究
-通用的：https${符号}${host}/${ID}/${转码}${转码2}
+通用订阅地址：https${符号}${host}/${ID}/${转码}${转码2}${tokenHint}
 `;
 }
 
@@ -597,4 +614,4 @@ function 给我通用配置文件(host) {
       return `${转码}${转码2}${符号}${哎呀呀这是我的VL密钥}@${addr}:${port}?encryption=none&${tlsOption}&sni=${host}&type=ws&host=${host}&path=%2F%3Fed%3D2560#${name}`;
     }).join("\n");
   }
-  }
+        }
