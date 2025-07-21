@@ -16,7 +16,7 @@ let 转码 = 'vl', 转码2 = 'ess', 符号 = '://';
 let 哎呀呀这是我的ID啊 = "123456"; // 订阅路径
 let 哎呀呀这是我的VL密钥 = "188eb8bd-7154-4e20-91ec-dfadaf1f632b"; // UUID
 
-let 私钥开关 = false;
+let 私钥开关 = true;
 let 咦这是我的私钥哎 = "";
 
 let 隐藏订阅 = false; // 开启 true ━ 关闭false
