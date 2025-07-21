@@ -2,9 +2,9 @@
 // Cloudflare Worker: VL over WebSocket + SOCKS5
 // --------------------------------------------------------------------
 // 环境变量 (Vars) 说明：
-//   UUID        必填，VL 用户的 UUID
-//   ID          可选，订阅路径 (默认 123456)
-//   SOCKS5_ADDRESS	必填 user:pass@127.0.0.1:1080, 127.0.0.1:1080 或远程txt URL，否则就走直连
+//   UUID        必填，VL 用户的 UUID                        
+//   ID          可选，订阅路径 (默认 123456)                 
+//   SOCKS5_ADDRESS	必填 user:pass@127.0.0.1:1080 否则就走直连
 //   隐藏        可选，true|false，true 时订阅接口只返回嘲讽语.
 // ====================================================================
 
@@ -12,7 +12,7 @@ import { connect } from 'cloudflare:sockets';
 
 let 转码 = 'vl', 转码2 = 'ess', 符号 = '://';
 
-//////////////////////////////////////////////////////////////////////////配置区块////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////配置区块////////////////////////////////////////////////////////////////////////  
 let 哎呀呀这是我的ID啊 = "123456"; // 订阅路径
 let 哎呀呀这是我的VL密钥 = "188eb8bd-7154-4e20-91ec-dfadaf1f632b"; // UUID
 
@@ -30,10 +30,7 @@ let 我的节点名字 = 'SOCKS5版';
 // 新增SOCKS5相关配置
 let 启用SOCKS5反代 = true; // 选择是否启用SOCKS5反代功能，true启用，false不启用，可以通过环境变量SOCKS5_ENABLE控制
 let 启用SOCKS5全局反代 = true; // 选择是否启用SOCKS5全局反代，启用后所有访问都是S5的落地，可以通过环境变量SOCKS5_GLOBAL控制
-let 我的SOCKS5账号 = ''; // 格式'账号:密码@地址:端口'，可以通过环境变量SOCKS5_ADDRESS控制，现在也支持 '地址:端口' 或远程 .txt URL
-let SOCKS5代理列表 = []; // 存储解析后的SOCKS5代理列表
-let 当前SOCKS5索引 = 0; // 当前使用的SOCKS5代理的索引
-let 每次尝试SOCKS5的最大次数 = 3; // 每个SOCKS5代理最多尝试连接的次数
+let 我的SOCKS5账号 = ''; // 格式'账号:密码@地址:端口'，可以通过环境变量SOCKS5_ADDRESS控制
 
 let DOH服务器列表 = [ //DOH地址，基本上已经涵盖市面上所有通用地址了，一般无需修改
   "https://dns.google/dns-query",
@@ -75,9 +72,6 @@ export default {
     启用SOCKS5反代 = 读取环境变量('SOCKS5_ENABLE', 启用SOCKS5反代, env);
     启用SOCKS5全局反代 = 读取环境变量('SOCKS5_GLOBAL', 启用SOCKS5全局反代, env);
     我的SOCKS5账号 = 读取环境变量('SOCKS5_ADDRESS', 我的SOCKS5账号, env);
-
-    // New: Initialize SOCKS5 proxy list on each request (or consider caching for better performance)
-    await 初始化SOCKS5代理列表();
 
     const 升级标头 = 访问请求.headers.get('Upgrade');
     const url = new URL(访问请求.url);
@@ -139,35 +133,6 @@ export default {
   }
 };
 
-// New function to initialize SOCKS5 proxy list
-async function 初始化SOCKS5代理列表() {
-  if (!我的SOCKS5账号) {
-    SOCKS5代理列表 = [];
-    return;
-  }
-
-  if (我的SOCKS5账号.startsWith('http://') || 我的SOCKS5账号.startsWith('https://')) {
-    // Fetch from remote .txt
-    try {
-      const 响应 = await fetch(我的SOCKS5账号);
-      const 文本 = await 响应.text();
-      SOCKS5代理列表 = 文本.split('\n')
-                           .map(line => line.trim())
-                           .filter(line => line && !line.startsWith('#')); // Filter out empty lines and comments
-    } catch (e) {
-      console.error(`无法获取SOCKS5代理列表: ${我的SOCKS5账号}`, e);
-      SOCKS5代理列表 = [];
-    }
-  } else {
-    // Single SOCKS5 proxy from variable
-    SOCKS5代理列表 = [我的SOCKS5账号];
-  }
-  // Shuffle the list to allow for more even distribution/testing
-  SOCKS5代理列表 = SOCKS5代理列表.sort(() => Math.random() - 0.5);
-  console.log(`初始化SOCKS5代理列表 (${SOCKS5代理列表.length} 个代理): ${JSON.stringify(SOCKS5代理列表)}`);
-  当前SOCKS5索引 = 0; // Reset index when list is initialized/updated
-}
-
 async function 升级WS请求(访问请求, tcpSocket, initialData) {
   const { 0: 客户端, 1: WS接口 } = new WebSocketPair();
   WS接口.accept();
@@ -218,46 +183,24 @@ async function 解析VL标头(buf) {
   const initialData = buf.slice(地址信息索引 + 地址长度);
   let tcpSocket;
 
-  // SOCKS5 逻辑集成 - Modified to incorporate polling
-  if (启用SOCKS5反代 && SOCKS5代理列表.length > 0) {
-    let attempts = 0;
-    const maxGlobalAttempts = SOCKS5代理列表.length * 每次尝试SOCKS5的最大次数; // 总尝试次数
-
-    while (attempts < maxGlobalAttempts) {
-      const currentSOCKS5Address = SOCKS5代理列表[当前SOCKS5索引];
+  // SOCKS5 逻辑集成
+  if (启用SOCKS5反代 && 我的SOCKS5账号) {
+    if (启用SOCKS5全局反代) { // 全局SOCKS5反代
+      tcpSocket = await 创建SOCKS5接口(识别地址类型, 访问地址, 访问端口);
+    } else { // 非全局SOCKS5反代，仅当直接连接失败时尝试SOCKS5
       try {
-        console.log(`尝试连接 SOCKS5 代理: ${currentSOCKS5Address} (尝试次数: ${attempts + 1})`);
-        if (启用SOCKS5全局反代) {
-          tcpSocket = await 创建SOCKS5接口(识别地址类型, 访问地址, 访问端口, currentSOCKS5Address);
-        } else {
-          try {
-            tcpSocket = connect({ hostname: 访问地址, port: 访问端口 });
-            await tcpSocket.opened;
-          } catch (e) {
-            console.warn(`直接连接失败，尝试通过SOCKS5代理 (${currentSOCKS5Address}): ${e.message}`);
-            tcpSocket = await 创建SOCKS5接口(识别地址类型, 访问地址, 访问端口, currentSOCKS5Address);
-          }
-        }
-        await tcpSocket.opened; // Ensure the socket is opened before returning
-        console.log(`成功连接 SOCKS5 代理: ${currentSOCKS5Address}`);
-        break; // Connection successful, exit loop
+        tcpSocket = connect({ hostname: 访问地址, port: 访问端口 });
+        await tcpSocket.opened;
       } catch (e) {
-        console.error(`SOCKS5代理 (${currentSOCKS5Address}) 连接失败: ${e.message}`);
-        // Move to the next proxy
-        当前SOCKS5索引 = (当前SOCKS5索引 + 1) % SOCKS5代理列表.length;
-        attempts++;
-        if (attempts === maxGlobalAttempts) {
-          throw new Error("所有SOCKS5代理均无法连接，请检查SOCKS5配置或网络");
-        }
-        // Optional: Add a small delay before retrying
-        await new Promise(resolve => setTimeout(resolve, 50)); // Short delay
+        console.warn(`直接连接失败，尝试通过SOCKS5代理: ${e}`);
+        tcpSocket = await 创建SOCKS5接口(识别地址类型, 访问地址, 访问端口);
       }
     }
-  } else { // No SOCKS5 enabled or no proxies configured, direct connect
+  } else { // 不启用SOCKS5反代，直接连接
     tcpSocket = connect({ hostname: 访问地址, port: 访问端口 });
-    await tcpSocket.opened;
   }
 
+  await tcpSocket.opened;
   return { tcpSocket, initialData };
 }
 
@@ -274,10 +217,10 @@ async function 建立传输管道(ws, tcp, init) {
       if (value) ws.send(value);
     }
   } finally {
-    try { ws.close(); } catch (e) { console.warn("Failed to close websocket:", e); }
-    try { reader.cancel(); } catch (e) { console.warn("Failed to cancel reader:", e); }
-    try { writer.releaseLock(); } catch (e) { console.warn("Failed to release writer lock:", e); }
-    try { tcp.close(); } catch (e) { console.warn("Failed to close tcp socket:", e); }
+    try { ws.close(); } catch {}
+    try { reader.cancel(); } catch {}
+    try { writer.releaseLock(); } catch {}
+    tcp.close();
   }
 }
 
@@ -286,8 +229,8 @@ function 验证VL的密钥(a) {
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }
 
-async function 创建SOCKS5接口(识别地址类型, 访问地址, 访问端口, SOCKS5ConfigString) {
-  const { 账号, 密码, 地址, 端口 } = await 获取SOCKS5账号(SOCKS5ConfigString);
+async function 创建SOCKS5接口(识别地址类型, 访问地址, 访问端口) {
+  const { 账号, 密码, 地址, 端口 } = await 获取SOCKS5账号(我的SOCKS5账号);
   const SOCKS5接口 = connect({ hostname: 地址, port: 端口 });
   let 传输数据, 读取数据;
   try {
@@ -298,28 +241,25 @@ async function 创建SOCKS5接口(识别地址类型, 访问地址, 访问端口
 
     // SOCKS5 认证协商
     // Support no authentication (0x00) and username/password (0x02)
-    const 构建S5认证 = new Uint8Array([5, (账号 || 密码) ? 2 : 1, 0, (账号 || 密码) ? 0x02 : 0x00].filter(v => v !== undefined));
+    const 构建S5认证 = new Uint8Array([5, 2, 0, 2]);
     await 传输数据.write(构建S5认证);
     const 读取认证要求 = (await 读取数据.read()).value;
 
-    if (!读取认证要求 || 读取认证要求.length < 2 || 读取认证要求[0] !== 0x05) {
-        throw new Error(`SOCKS5协议协商失败或无效响应: ${读取认证要求 ? Array.from(读取认证要求).join(',') : '无响应'}`);
-    }
-
-    if (读取认证要求[1] === 0x02) { // Check if username/password authentication is required
+    if (读取认证要求[1] === 0x02) { // Username/Password authentication required
       if (!账号 || !密码) {
-        throw new Error(`SOCKS5代理需要账号密码，但未配置`);
+        throw new Error (`未配置SOCKS5账号密码`);
       }
       const 构建账号密码包 = new Uint8Array([ 1, 账号.length, ...转换数组.encode(账号), 密码.length, ...转换数组.encode(密码) ]);
       await 传输数据.write(构建账号密码包);
       const 读取账号密码认证结果 = (await 读取数据.read()).value;
-      if (!读取账号密码认证结果 || 读取账号密码认证结果.length < 2 || 读取账号密码认证结果[0] !== 0x01 || 读取账号密码认证结果[1] !== 0x00) {
-        throw new Error(`SOCKS5账号密码错误或认证失败: ${读取账号密码认证结果 ? Array.from(读取账号密码认证结果).join(',') : '无响应'}`);
+      if (读取账号密码认证结果[0] !== 0x01 || 读取账号密码认证结果[1] !== 0x00) {
+        throw new Error (`SOCKS5账号密码错误`);
       }
-    } else if (读取认证要求[1] !== 0x00) { // If not 0x02 and not 0x00, then unsupported method
-        throw new Error(`SOCKS5代理不支持的认证方法: ${读取认证要求[1]}`);
+    } else if (读取认证要求[1] === 0x00) { // No authentication required
+        // Do nothing, proceed to connection
+    } else {
+        throw new Error (`SOCKS5认证方式不支持: ${读取认证要求[1]}`);
     }
-
 
     // SOCKS5 连接目标
     let 转换访问地址;
@@ -343,8 +283,8 @@ async function 创建SOCKS5接口(识别地址类型, 访问地址, 访问端口
     const 构建转换后的访问地址 = new Uint8Array([ 5, 1, 0, ...转换访问地址, 访问端口 >> 8, 访问端口 & 0xff ]);
     await 传输数据.write(构建转换后的访问地址);
     const 检查返回响应 = (await 读取数据.read()).value;
-    if (!检查返回响应 || 检查返回响应.length < 2 || 检查返回响应[0] !== 0x05 || 检查返回响应[1] !== 0x00) {
-      throw new Error (`SOCKS5目标地址连接失败，访问地址: ${访问地址}，SOCKS5响应: ${检查返回响应 ? Array.from(检查返回响应).join(',') : '无响应'}`);
+    if (检查返回响应[0] !== 0x05 || 检查返回响应[1] !== 0x00) {
+      throw new Error (`SOCKS5目标地址连接失败，访问地址: ${访问地址}`);
     }
 
     传输数据.releaseLock();
@@ -354,7 +294,7 @@ async function 创建SOCKS5接口(识别地址类型, 访问地址, 访问端口
     if (传输数据) 传输数据.releaseLock();
     if (读取数据) 读取数据.releaseLock();
     if (SOCKS5接口) SOCKS5接口.close();
-    throw new Error (`SOCKS5握手失败: ${e.message}`);
+    throw new Error (`SOCKS5握手失败: ${e}`);
   }
 }
 
@@ -433,4 +373,4 @@ function 给我通用配置文件(host) {
       return `${转码}${转码2}${符号}${哎呀呀这是我的VL密钥}@${addr}:${port}?encryption=none&${tlsOpt}&sni=${host}&type=ws&host=${host}&path=%2F%3Fed%3D2560#${name}`;
     }).join("\n");
   }
-    }
+}
