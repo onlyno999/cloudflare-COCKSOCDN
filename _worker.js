@@ -14,6 +14,7 @@
 //   私钥开关    可选，true|false，是否启用私钥认证
 //   嘲讽语      可选，隐藏订阅时返回的嘲讽语
 //   我的节点名字  可选，订阅中节点的默认名称
+//                  《注意事项》
 //   使用说明 变量 选填 SOCKS5_TXT_URL 需要提供远程.txt格式文件。
 //      SOCKS5_ADDRESS  无账号无密码:123456:1234直接填写IP加端口
 //       SOCKS5_ADDRESS   有账号的，严格按照账号密码。user:pass@127.0.0.1:1080
@@ -34,7 +35,7 @@ let 咦这是我的私钥哎 = "";
 let 隐藏订阅 = false; // 开启 true ━ 关闭false
 let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿";
 
-let 我的优选 = []; // 可通过环境变量 IP 配置，也可以通过 TXT 配置
+let 我的优选 = [cloudflare-ddns.zone.id:443#美国 域名 默认值 — Cloudflare CDN 节点 ]; // 可通过环境变量 IP 配置，也可以通过 TXT 配置
 let 我的优选TXT = ['']; // 可通过环境变量 TXT 配置，用于从远程文件加载优选 IP
 
 let 我的节点名字 = 'SOCKS5版';
@@ -568,8 +569,12 @@ function 给我订阅页面(ID, host) {
 }
 
 function 给我通用配置文件(host) {
-  // 确保我的优选至少有一个值，并且是可用的 host
-  const effectiveMyPreferred = 我的优选.length > 0 ? 我的优选 : [`${host}:443#备用节点`];
+  // 检查 我的优选 和 我的优选TXT 是否为空或只包含空字符串
+  const isMyPreferredEmpty = 我的优选.length === 0 || (我的优选.length === 1 && 我的优选[0] === '');
+  const isMyPreferredTxtEmpty = 我的优选TXT.length === 0 || (我的优选TXT.length === 1 && 我的优选TXT[0] === '');
+
+  // 如果 我的优选 和 我的优选TXT 都为空，则使用备用节点信息
+  const effectiveMyPreferred = (!isMyPreferredEmpty || !isMyPreferredTxtEmpty) ? 我的优选 : [`${host}:443#备用节点`];
 
   if (私钥开关) {
     return `请先关闭私钥功能`;
