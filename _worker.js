@@ -36,7 +36,7 @@ let 隐藏订阅 = false; // 开启 true ━ 关闭false
 let 嘲讽语 = "哎呀你找到了我，但是我就是不给你看，气不气，嘿嘿嘿";
 
 let 我的优选 = ['cloudflare-ddns.zone.id:443#美国 域名 默认值 — Cloudflare CDN 节点']; // 可通过环境变量 IP 配置，也可以通过 TXT 配置
-let 我的优选TXT = ['https://123.mot.cloudns.biz/proxyip/ip.txt']; // 可通过环境变量 TXT 配置，用于从远程文件加载优选 IP
+let 我的优选TXT = ['']; // 可通过环境变量 TXT 配置，用于从远程文件加载优选 IP
 
 let 我的节点名字 = 'SOCKS5版';
 
