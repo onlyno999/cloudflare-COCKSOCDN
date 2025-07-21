@@ -429,7 +429,7 @@ async function 创建SOCKS5接口连接(账号, 密码, S5地址, S5端口, 识�
     return SOCKS5接口;
   } catch (e) {
     if (传输数据) 传输数据.releaseLock();
-    if (读取数据) 读���数据.releaseLock();
+    if (读取数据) 读取数据.releaseLock();
     if (SOCKS5接口) SOCKS5接口.close();
     // 抛出错误以便上层 (尝试创建SOCKS5接口) 捕获并跳过
     throw e;
