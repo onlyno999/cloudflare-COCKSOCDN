@@ -49,7 +49,7 @@ let 我的SOCKS5账号 = ''; // 格式'账号:密码@地址:端口'，可以通�
 let SOCKS5地址列表URL = ''; // 可以通过环境变量 SOCKS5_TXT_URL 控制
 
 // SOCKS5 地址池和当前索引 (在并发模式下，索引更多用于初始加载后的顺序，实际连接由 Promise.any 管理)
-let SOCKS5地址池 = ['https://raw.githubusercontent.com/onlyno999/cloudflare-COCKSOCN/main/socks.txt'];
+let SOCKS5地址池 = 'https://raw.githubusercontent.com/onlyno999/cloudflare-COCKSOCN/main/socks.txt';// 咱们的SOCKS5地址池，都在这里了！
 let SOCKS5地址列表上次更新时间 = 0;
 const SOCKS5地址列表刷新间隔 = 5 * 60 * 1000; // 5分钟刷新一次 (毫秒)
 const SOCKS5_CONNECT_TIMEOUT = 5000; // SOCKS5 连接超时 (毫秒)
