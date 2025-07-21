@@ -1,5 +1,5 @@
 // ====================================================================
-// Cloudflare Worker: VL over WebSocket + SOCKS5
+// Cloudflare Worker: VL over WebSocket + SOCKS5 (带并发SOCKS5代理选择)
 // --------------------------------------------------------------------
 // 环境变量 (Vars) 说明：
 //   UUID        必填，VL 用户的 UUID
@@ -42,11 +42,11 @@ let 我的SOCKS5账号 = ''; // 格式'账号:密码@地址:端口'，可以通�
 // 新增：SOCKS5 地址列表 URL
 let SOCKS5地址列表URL = ''; // 可以通过环境变量 SOCKS5_TXT_URL 控制
 
-// SOCKS5 地址池和当前索引
+// SOCKS5 地址池和当前索引 (在并发模式下，索引更多用于初始加载后的顺序，实际连接由 Promise.any 管理)
 let SOCKS5地址池 = [];
-let 当前SOCKS5索引 = 0;
 let SOCKS5地址列表上次更新时间 = 0;
-const SOCKS5地址列表刷新间隔 = 1 * 60 * 1000; // 1分钟刷新一次 (毫秒)
+const SOCKS5地址列表刷新间隔 = 5 * 60 * 1000; // 5分钟刷新一次 (毫秒)
+const SOCKS5_CONNECT_TIMEOUT = 5000; // SOCKS5 连接超时 (毫秒)
 
 let DOH服务器列表 = [ //DOH地址，基本上已经涵盖市面上所有通用地址了，一般无需修改
   "https://dns.google/dns-query",
@@ -74,7 +74,7 @@ const 读取环境变量 = (name, fallback, env) => {
 // 新增：加载 SOCKS5 地址列表的函数
 async function 加载SOCKS5地址列表() {
   if (!SOCKS5地址列表URL) {
-    // console.log('SOCKS5_TXT_URL 未配置，不加载 SOCKS5 地址列表。');
+    console.log('SOCKS5_TXT_URL 未配置，不加载 SOCKS5 地址列表。');
     return;
   }
 
@@ -98,11 +98,10 @@ async function 加载SOCKS5地址列表() {
 
     if (addresses.length > 0) {
       SOCKS5地址池 = addresses;
-      当前SOCKS5索引 = 0; // 成功加载新列表后，重置索引
       SOCKS5地址列表上次更新时间 = currentTime;
       console.log(`成功加载 ${SOCKS5地址池.length} 个 SOCKS5 地址。`);
     } else {
-      console.warn('SOCKS5 地址列表文件为空或不含有效地址。');
+      console.warn('SOCKS5 地址列表文件为空或不含有效地址。将保留上次成功的列表（如果存在）。');
       // 如果文件内容为空，不清空当前的 SOCKS5地址池，保留上次成功的
     }
   } catch (e) {
@@ -275,43 +274,64 @@ async function 解析VL标头(buf) {
   return { tcpSocket, initialData };
 }
 
-// 新增：尝试创建SOCKS5接口（带轮询和跳过失败逻辑）
+// 改进：尝试创建SOCKS5接口（并发模式，哪个快用哪个，自动跳过失败）
 async function 尝试创建SOCKS5接口(识别地址类型, 目标地址, 目标端口) {
-  let 尝试次数 = 0;
-  // 计算最大尝试次数：如果 SOCKS5 地址池有地址，则尝试所有地址；否则只尝试一次 SOCKS5_ADDRESS。
-  const maxRetries = SOCKS5地址池.length > 0 ? SOCKS5地址池.length : (我的SOCKS5账号 ? 1 : 0);
+  let proxiesToTry = [];
 
-  if (maxRetries === 0) {
+  // 首先，尝试从 SOCKS5地址池 获取代理
+  if (SOCKS5地址池.length > 0) {
+    proxiesToTry = [...SOCKS5地址池]; // 复制一份，避免修改原数组
+  }
+
+  // 如果 SOCKS5地址池 为空，但 我的SOCKS5账号 配置了，则将其作为备用
+  if (proxiesToTry.length === 0 && 我的SOCKS5账号) {
+    proxiesToTry.push(我的SOCKS5账号);
+  }
+
+  if (proxiesToTry.length === 0) {
     throw new Error('未配置任何 SOCKS5 代理地址 (SOCKS5_TXT_URL 或 SOCKS5_ADDRESS)。');
   }
 
-  while (尝试次数 < maxRetries) {
-    let currentSOCKS5Config;
-    if (SOCKS5地址池.length > 0) {
-      currentSOCKS5Config = SOCKS5地址池[当前SOCKS5索引];
-    } else {
-      // 如果 SOCKS5地址池 为空，但 我的SOCKS5账号 配置了，则使用它作为唯一尝试
-      currentSOCKS5Config = 我的SOCKS5账号;
-    }
-
+  const connectionPromises = proxiesToTry.map(async (proxyConfig, index) => {
+    let tcpSocket = null;
     try {
-      const { 账号, 密码, 地址, 端口 } = await 获取SOCKS5账号(currentSOCKS5Config);
-      console.log(`尝试连接 SOCKS5 代理: ${账号 ? '带认证' : '无认证'} ${地址}:${端口} (尝试 ${尝试次数 + 1}/${maxRetries})`);
-      const tcpSocket = await 创建SOCKS5接口连接(账号, 密码, 地址, 端口, 识别地址类型, 目标地址, 目标端口);
-      return tcpSocket; // 成功连接，返回 socket
+      const { 账号, 密码, 地址, 端口 } = await 获取SOCKS5账号(proxyConfig);
+      console.log(`正在并发尝试连接 SOCKS5 代理: ${账号 ? '带认证' : '无认证'} ${地址}:${端口} (代理 ${index + 1}/${proxiesToTry.length})`);
+
+      // 创建一个带超时的 Promise
+      const timeoutPromise = new Promise((resolve, reject) => {
+        const id = setTimeout(() => {
+          reject(new Error(`连接超时: ${地址}:${端口}`));
+        }, SOCKS5_CONNECT_TIMEOUT); // 使用配置的超时时间
+      });
+
+      // 竞速连接尝试和超时
+      tcpSocket = await Promise.race([
+        创建SOCKS5接口连接(账号, 密码, 地址, 端口, 识别地址类型, 目标地址, 目标端口),
+        timeoutPromise
+      ]);
+
+      console.log(`成功连接 SOCKS5 代理: ${地址}:${端口}`);
+      return { socket: tcpSocket, config: proxyConfig }; // 返回成功连接的 socket
     } catch (e) {
-      console.warn(`SOCKS5 代理连接失败 (${currentSOCKS5Config}): ${e.message}`);
-      尝试次数++;
-      if (SOCKS5地址池.length > 0) {
-        当前SOCKS5索引 = (当前SOCKS5索引 + 1) % SOCKS5地址池.length; // 轮询到下一个地址
-        console.log(`切换到下一个 SOCKS5 代理地址，当前索引: ${当前SOCKS5索引}`);
-      } else {
-        // 如果没有地址池，且我的SOCKS5账号也失败了，直接结束
-        break;
+      console.warn(`SOCKS5 代理连接失败或超时 (${proxyConfig}): ${e.message}`);
+      if (tcpSocket) {
+        try { tcpSocket.close(); } catch (closeErr) { console.warn("关闭失败连接时出错:", closeErr); }
       }
+      return Promise.reject(new Error(`代理失败: ${proxyConfig} - ${e.message}`)); // 标记为拒绝，让 Promise.any 处理
     }
+  });
+
+  try {
+    const { socket, config } = await Promise.any(connectionPromises);
+    // 当 Promise.any 成功时，意味着至少一个代理连接成功
+    // 此时，Promise.any 会自动处理其他仍在进行的 Promise，不成功的会被抛弃
+    return socket;
+  } catch (aggregateError) {
+    // Promise.any 抛出 AggregateError，如果所有 Promise 都失败了
+    console.error(`所有 SOCKS5 代理尝试均失败:`, aggregateError.errors.map(e => e.message).join('; '));
+    throw new Error('所有 SOCKS5 代理尝试均失败。');
   }
-  throw new Error('所有 SOCKS5 代理尝试均失败。');
 }
 
 // 提取创建SOCKS5接口的核心逻辑到单独函数，方便复用
@@ -362,30 +382,28 @@ async function 创建SOCKS5接口连接(账号, 密码, S5地址, S5端口, 识�
       case 3: // IPv6
         const ipv6Parts = 访问地址.split(':');
         const ipv6Bytes = [];
-        for (let i = 0; i < 8; i++) {
-            let part = ipv6Parts[i] || '';
-            // 处理 :: 压缩的情况
-            if (part === '' && ipv6Parts.includes('')) { // 找到 :: 的位置
-                let missingParts = 8 - ipv6Parts.filter(p => p !== '').length;
-                for (let j = 0; j < missingParts; j++) {
-                    ipv6Bytes.push(0x00, 0x00);
-                }
-                // 跳过已处理的 :: 标记
-                const firstEmpty = ipv6Parts.indexOf('');
-                if (firstEmpty === i) {
-                    i += missingParts - 1; // 调整 i 使得下次循环从正确的位置开始
-                    continue;
-                }
-            }
-            if (part.length === 0) { // 连续的冒号，如 "::" 中间部分
+        let doubleColonHandled = false;
+        for (let i = 0; i < ipv6Parts.length; i++) {
+          let part = ipv6Parts[i];
+          if (part === '') { // Handle ::
+            if (!doubleColonHandled) {
+              let numMissingParts = 8 - (ipv6Parts.length - 1);
+              if (ipv6Parts[0] === '' && i === 0) numMissingParts++; // e.g. ::1
+              if (ipv6Parts[ipv6Parts.length - 1] === '' && i === ipv6Parts.length - 1) numMissingParts++; // e.g. 1::
+
+              for (let j = 0; j < numMissingParts; j++) {
                 ipv6Bytes.push(0x00, 0x00);
-            } else if (part.length === 1) {
-                ipv6Bytes.push(0x00, parseInt(part, 16));
-            } else if (part.length === 2) {
-                ipv6Bytes.push(0x00, parseInt(part, 16));
-            } else {
-                ipv6Bytes.push(parseInt(part.substring(0, part.length - 2), 16), parseInt(part.substring(part.length - 2), 16));
+              }
+              doubleColonHandled = true;
             }
+          } else {
+            let val = parseInt(part, 16);
+            ipv6Bytes.push((val >> 8) & 0xFF, val & 0xFF);
+          }
+        }
+        // If :: was at the end and no explicit parts followed, ensure 8 parts
+        while (ipv6Bytes.length < 16) {
+            ipv6Bytes.push(0x00, 0x00);
         }
         转换访问地址 = new Uint8Array( [4, ...ipv6Bytes] );
         break;
@@ -574,4 +592,4 @@ function 给我通用配置文件(host) {
       return `${转码}${转码2}${符号}${哎呀呀这是我的VL密钥}@${addr}:${port}?encryption=none&${tlsOption}&sni=${host}&type=ws&host=${host}&path=%2F%3Fed%3D2560#${name}`;
     }).join("\n");
   }
-                  }
+  }
