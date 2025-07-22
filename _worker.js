@@ -6,7 +6,8 @@
 //   UUID        必填，VL 用户的 UUID
 //   ID          可选，订阅路径 (默认 123456)
 //   SOCKS5_ADDRESS	可选 user:pass@127.0.0.1:1080 作为 SOCKS5_TXT_URL 加载失败时的备用。
-//   SOCKS5_CONNECT_TIMEOUT = 5000; // SOCKS5 连接超时 (毫秒) 可选，SOCKS5 地址列表 TXT 文件的 URL，例如：https://example.com/socks5_list.txt
+//   SOCKS5_TXT_URL 可选 例如：https://example.com/socks5_list.txt
+//   SOCKS5_CONNECT_TIMEOUT = 5000; // SOCKS5 连接超时 (毫秒) 可选，SOCKS5 地址列表 TXT 文件的 URL
 //   SOCKS5_ENABLE 可选，true|false，true启用SOCKS5反代，false不启用 (默认 true)
 //   SOCKS5_GLOBAL 可选，true|false，true启用SOCKS5全局反代，false仅在直连失败时尝试 (默认 true)
 //   隐藏        可选，true|false，true 时订阅接口只返回嘲讽语.
@@ -597,4 +598,4 @@ function 给我通用配置文件(host) {
       return `${转码}${转码2}${符号}${哎呀呀这是我的VL密钥}@${addr}:${port}?encryption=none&${tlsOption}&sni=${host}&type=ws&host=${host}&path=%2F%3Fed%3D2560#${name}`;
     }).join("\n");
   }
-      }
+}
