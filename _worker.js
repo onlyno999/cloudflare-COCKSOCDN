@@ -5,7 +5,7 @@
 // 环境变量 (Vars) 说明：
 //   UUID        必填，VL 用户的 UUID
 //   ID          可选，订阅路径 (默认 123456)
-//   SOCKS5_ADDRESS	可选 user:pass@127.0.0.1:1080 作为 SOCKS5_TXT_URL 加载失败时的备用。
+//   SOCKS5_ADDRESS	可选 user:pass@127.0.0.1:1080 作为 SOCKS5_TXT_URL 加载失败时的备用
 //   SOCKS5_TXT_URL 可选 例如：https://example.com/socks5_list.txt
 //   SOCKS5_CONNECT_TIMEOUT = 5000; // SOCKS5 连接超时 (毫秒) 可选，SOCKS5 地址列表 TXT 文件的 URL
 //   SOCKS5_ENABLE 可选，true|false，true启用SOCKS5反代，false不启用 (默认 true)
