@@ -58,7 +58,7 @@ let DOH服务器列表 = [ //DOH地址，基本上已经涵盖市面上所有通
 ];
 
 // --- 新增：伪装页面相关的变量和函数 ---
-let disguiseUrl = 'https://libretv.cmliussss.dedyn.io/'; // 添加伪装页面的URL
+let disguiseUrl = 'https://cf-worker-dir-bke.pages.dev/'; // 添加伪装页面的URL
 
 async function serveDisguisePage() {
   try {
