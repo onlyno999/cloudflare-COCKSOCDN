@@ -57,6 +57,30 @@ let DOH服务器列表 = [ //DOH地址，基本上已经涵盖市面上所有通
   "https://dns.quad9.net/dns-query",
 ];
 
+// --- 新增：伪装页面相关的变量和函数 ---
+let disguiseUrl = 'https://libretv.cmliussss.dedyn.io/'; // 添加伪装页面的URL
+
+async function serveDisguisePage() {
+  try {
+    const res = await fetch(disguiseUrl, { cf: { cacheEverything: true } });
+    return new Response(res.body, res);
+  } catch {
+    return new Response(
+      `<!DOCTYPE html>
+       <html>
+         <head><title>Welcome</title></head>
+         <body><h1>Cloudflare Worker 已部署成功</h1>
+         <p>此页面为静态伪装页面（远程加载失败）。</p></body>
+       </html>`,
+      {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      }
+    );
+  }
+}
+// --- 结束新增 ---
+
 const 读取环境变量 = (name, fallback, env) => {
   const raw = import.meta?.env?.[name] ?? env?.[name];
   if (raw === undefined || raw === null || raw === '') return fallback;
@@ -155,6 +179,8 @@ export default {
         if (所有节点.length > 0) 我的优选 = 所有节点;
       }
       switch (url.pathname) {
+        case '/': // 处理伪装页面
+          return serveDisguisePage(); // 返回伪装页面
         case `/${哎呀呀这是我的ID啊}`: {
           const sub = 给我订阅页面(哎呀呀这是我的ID啊, 访问请求.headers.get('Host'));
           return new Response(sub, {
@@ -177,7 +203,7 @@ export default {
           }
         }
         default:
-          return new Response('Hello World!', { status: 200 });
+          return new Response('Hello World!', { status: 200 }); // 或其他默认响应
       }
     } else {
       // WebSocket 升级请求处理
@@ -598,4 +624,4 @@ function 给我通用配置文件(host) {
       return `${转码}${转码2}${符号}${哎呀呀这是我的VL密钥}@${addr}:${port}?encryption=none&${tlsOption}&sni=${host}&type=ws&host=${host}&path=%2F%3Fed%3D2560#${name}`;
     }).join("\n");
   }
-}
+               }
